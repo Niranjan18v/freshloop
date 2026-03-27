@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:workmanager/workmanager.dart';
 import 'firebase_options.dart';
 import 'core/app_colors.dart';
@@ -12,6 +13,7 @@ import 'screens/shop/shop_screen.dart';
 import 'screens/add/add_product_screen.dart';
 import 'screens/products/products_screen.dart';
 import 'screens/sales/sell_screen.dart';
+import 'screens/login_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,14 +23,12 @@ Future<void> main() async {
   final notifications = NotificationService();
   await notifications.init();
   
-  // ── 🌑 WORKMANAGER REGISTRATION ──────────────────────────────────────d
-  // Initializes background task dispatcher for 'FreshLoop'
+  // ── 🌑 WORKMANAGER REGISTRATION ──────────────────────────────────────
   Workmanager().initialize(
     callbackDispatcher, 
-    isInDebugMode: true // Set to false for production
+    isInDebugMode: true 
   );
   
-  // Register a periodic task (runs every 6 hours by default)
   Workmanager().registerPeriodicTask(
     "1", 
     "expiryTask", 
@@ -54,8 +54,25 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         primaryColor: const Color(0xFF5D8064),
         scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+        appBarTheme: const AppBarTheme(elevation: 0, backgroundColor: Colors.transparent),
       ),
-      home: const MainNavigation(),
+      // ── 🛡️ AUTHENTICATION GATE ───────────────────────────────────────
+      // Automatically switches between Login and Home based on Firebase Auth State.
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          // While checking for the session...
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF5D8064))));
+          }
+          // If a user is logged in, show the App Navigation
+          if (snapshot.hasData) {
+            return const MainNavigation();
+          }
+          // Otherwise, show the Login Screen
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }
@@ -82,22 +99,27 @@ class MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: screens[index],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: index,
-        onTap: (i) => setState(() => index = i),
-        backgroundColor: const Color(0xFF5D8064),
-        selectedItemColor: const Color(0xFFA8D5BA),
-        unselectedItemColor: Colors.white70,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-        unselectedLabelStyle: const TextStyle(fontSize: 12),
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.store), label: "Shop"),
-          BottomNavigationBarItem(icon: Icon(Icons.add_circle), label: "Add"),
-          BottomNavigationBarItem(icon: Icon(Icons.inventory), label: "Products"),
-          BottomNavigationBarItem(icon: Icon(Icons.sell), label: "Sell"),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -10))],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: index,
+          onTap: (i) => setState(() => index = i),
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF5D8064),
+          unselectedItemColor: Colors.black26,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Home"),
+            BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: "Shop"),
+            BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline_rounded), label: "Add"),
+            BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: "Products"),
+            BottomNavigationBarItem(icon: Icon(Icons.sell_outlined), label: "Sell"),
+          ],
+        ),
       ),
     );
   }

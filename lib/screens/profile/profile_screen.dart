@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/app_colors.dart';
+import '../login_screen.dart';
 
-/// Minimalist and professional Profile Screen inspired by modern SaaS apps.
+/// Clean and professional Profile Screen with dynamic name display.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // 1. Get current User UID
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -38,9 +44,26 @@ class ProfileScreen extends StatelessWidget {
                     child: Icon(Icons.person_rounded, size: 50, color: AppColors.primary),
                   ),
                   const SizedBox(height: 16),
-                  const Text("Niranjan V", style: AppTextStyles.h2),
+
+                  // 2. Fetch and Display Name Dynamically
+                  FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Text("Loading...", style: AppTextStyles.h2);
+                      }
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        final data = snapshot.data!.data() as Map<String, dynamic>;
+                        return Text(data['name'] ?? "User", style: AppTextStyles.h2);
+                      }
+                      return const Text("User", style: AppTextStyles.h2);
+                    },
+                  ),
+                  
                   const SizedBox(height: 4),
-                  const Text("food.saver@freshloop.com", style: AppTextStyles.subtitle),
+                  // Display Email from Auth
+                  Text(FirebaseAuth.instance.currentUser?.email ?? "no-email@freshloop.com", style: AppTextStyles.subtitle),
+                  
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -64,14 +87,30 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   const Text("SETTINGS", style: AppTextStyles.label),
                   const SizedBox(height: 12),
-                  _settingsTile(Icons.notifications_none_rounded, "Notifications", "Alerts for expiring items", true),
-                  _settingsTile(Icons.security_rounded, "Privacy", "Manage your data", false),
-                  _settingsTile(Icons.help_outline_rounded, "Support", "Get help & feedback", false),
+                  _settingsTile(Icons.notifications_none_rounded, "Notifications", "Alerts for expiring items", true, () {}),
+                  _settingsTile(Icons.security_rounded, "Privacy", "Manage your data", false, () {}),
+                  _settingsTile(Icons.help_outline_rounded, "Support", "Get help & feedback", false, () {}),
                   
                   const SizedBox(height: 24),
                   const Text("ACCOUNT", style: AppTextStyles.label),
                   const SizedBox(height: 12),
-                  _settingsTile(Icons.logout_rounded, "Logout", "Sign out of your account", false, isDestructive: true),
+                  _settingsTile(
+                    Icons.logout_rounded, 
+                    "Logout", 
+                    "Sign out of your account", 
+                    false, 
+                    () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          (route) => false,
+                        );
+                      }
+                    }, 
+                    isDestructive: true
+                  ),
                 ],
               ),
             ),
@@ -92,15 +131,19 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _settingsTile(IconData icon, String title, String sub, bool hasSwitch, {bool isDestructive = false}) {
+  Widget _settingsTile(IconData icon, String title, String sub, bool hasSwitch, VoidCallback onTap, {bool isDestructive = false}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(20)),
       child: ListTile(
+        onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         leading: Container(
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: isDestructive ? AppColors.error.withOpacity(0.1) : AppColors.primaryLight, borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(
+            color: isDestructive ? AppColors.error.withOpacity(0.1) : AppColors.primaryLight, 
+            borderRadius: BorderRadius.circular(14)
+          ),
           child: Icon(icon, color: isDestructive ? AppColors.error : AppColors.primary, size: 22),
         ),
         title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: isDestructive ? AppColors.error : AppColors.textPrimary)),

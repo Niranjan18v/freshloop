@@ -8,7 +8,7 @@ import '../products/product_detail_screen.dart';
 import '../../widgets/notification_icon.dart';
 
 /// The Home Screen: showing a preview of inventory (3 urgent, 4 fresh).
-/// Upgraded to include the persistent Notification Center Bell.
+/// Upgraded with 'Safe Date Handling' to prevent crashes during Timestamp migration.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -41,14 +41,31 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  int _getDaysLeft(String? expiry) {
-    if (expiry == null || expiry.isEmpty) return 999;
-    try {
-      final parts = expiry.split('/');
-      final exp = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-      final today = DateTime.now();
-      return exp.difference(DateTime(today.year, today.month, today.day)).inDays;
-    } catch (_) { return 999; }
+  // ── 🛡️ SAFE DATE CONVERSION FUNCTION ──────────────────────────────────────
+  /// Safely converts dynamic Firestore data (String or Timestamp) into days left.
+  /// Prevents: type 'Timestamp' is not a subtype of type 'String?' crashes.
+  int _getDaysLeft(dynamic expiry) {
+    if (expiry == null) return 999;
+    
+    DateTime? expiryDate;
+
+    if (expiry is Timestamp) {
+      expiryDate = expiry.toDate();
+    } else if (expiry is String && expiry.isNotEmpty) {
+      try {
+        if (expiry.contains('/')) {
+          final parts = expiry.split('/');
+          expiryDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        } else {
+          expiryDate = DateTime.parse(expiry);
+        }
+      } catch (_) { return 999; }
+    }
+
+    if (expiryDate == null) return 999;
+
+    final today = DateTime.now();
+    return expiryDate.difference(DateTime(today.year, today.month, today.day)).inDays;
   }
 
   @override
@@ -76,15 +93,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 10),
                       const Text("FRESHLOOP", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black, letterSpacing: 0.5)),
                       const Spacer(),
-                      // 🔔 Notification Bell Feature
                       const NotificationIcon(),
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-                        child: CircleAvatar(
+                        child: const CircleAvatar(
                           radius: 18,
                           backgroundColor: Colors.white,
-                          child: const Icon(Icons.person, color: Color(0xFF2D3436), size: 20),
+                          child: Icon(Icons.person, color: Color(0xFF2D3436), size: 20),
                         ),
                       ),
                     ],
@@ -94,7 +110,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 10),
 
-              // ── 🎢 THE SLIDING CAROUSEL ───────────────────────────────────
               SizedBox(
                 height: 200,
                 child: PageView(
@@ -122,19 +137,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 14),
 
-              // ── ⏰ EXPIRING SOON LIST (Limit 3, Sorted) ─────────────────────
               _sectionHeader("⏰ Expiring Soon"),
               _streamedInventory(true, 3),
 
               const SizedBox(height: 14),
 
-              // ── 🟢 FRESH LIST (Limit 4, Sorted) ─────────────────────────────
               _sectionHeader("🟢 Fresh Products"),
               _streamedInventory(false, 4),
 
               const SizedBox(height: 24),
 
-              // ── 🔘 THE "SHOW MORE" BUTTON ──────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SizedBox(
@@ -146,7 +158,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                       elevation: 4,
-                      shadowColor: Colors.black.withOpacity(0.5),
                     ),
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductsScreen())),
                     child: const Text("Show More", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
@@ -235,7 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(data['name'] ?? 'Item', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                   const SizedBox(height: 4),
-                  Text("$days days left", style: TextStyle(color: isUrgent ? Colors.redAccent : Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(days <= 0 ? "Expired" : "$days days left", style: TextStyle(color: isUrgent ? Colors.redAccent : Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
                 ],
               ),
             ),
