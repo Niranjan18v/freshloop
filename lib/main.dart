@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'core/app_colors.dart';
 
 import 'screens/home/home_screen.dart';
 import 'screens/shop/shop_screen.dart';
@@ -6,7 +9,9 @@ import 'screens/add/add_product_screen.dart';
 import 'screens/products/products_screen.dart';
 import 'screens/sales/sell_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -18,7 +23,13 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'FreshLoop',
-      theme: ThemeData(useMaterial3: true),
+      theme: ThemeData(
+        useMaterial3: true,
+        primaryColor: AppColors.primary,
+        scaffoldBackgroundColor: AppColors.background,
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
+        fontFamily: 'Inter', // Typical clean startup font
+      ),
       home: const MainNavigation(),
     );
   }
@@ -42,52 +53,33 @@ class MainNavigationState extends State<MainNavigation> {
     SellScreen(),
   ];
 
-  void _onTap(int i) {
-    setState(() => index = i);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: screens[index],
-
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: index,
-        onTap: _onTap,
-
-        backgroundColor: const Color(0xFF5D8064),
-
-        selectedItemColor: const Color(0xFFA8D5BA), 
-        unselectedItemColor: Colors.white70,
-
-        selectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.bold,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.5))),
         ),
-
-        type: BottomNavigationBarType.fixed,
-
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: "Home",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.store),
-            label: "Shop",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle),
-            label: "Add",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.inventory),
-            label: "Products",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.sell),
-            label: "Sell",
-          ),
-        ],
+        child: BottomNavigationBar(
+          currentIndex: index,
+          onTap: (i) => setState(() => index = i),
+          backgroundColor: Colors.white,
+          selectedItemColor: AppColors.primary,
+          unselectedItemColor: AppColors.textMuted,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dashboard"),
+            BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_outlined), label: "Shop"),
+            BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline_rounded), label: "Add"),
+            BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: "Inventory"),
+            BottomNavigationBarItem(icon: Icon(Icons.sell_outlined), label: "Sell"),
+          ],
+        ),
       ),
     );
   }

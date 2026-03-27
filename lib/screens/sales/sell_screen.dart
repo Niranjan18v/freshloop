@@ -28,7 +28,7 @@ class _SellScreenState extends State<SellScreen> {
       "purchased": "10/3/2026",
       "expiry": "18/3/2026",
       "days": 3,
-      "image": "assets/images/milk1.png"
+      "image": "assets/images/milk.png"
     },
     {
       "name": "Oil",
@@ -75,10 +75,15 @@ class _SellScreenState extends State<SellScreen> {
     final list = getCurrentList();
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Sell Products"),
-        backgroundColor: AppColors.primary,
+        title: const Text("Sell Products",
+         style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 22,
+         ),
+         ),
+        backgroundColor: const Color.fromARGB(255, 224, 230, 228),
       ),
       body: Column(
         children: [

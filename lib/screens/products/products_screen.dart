@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/app_colors.dart';
+import 'product_detail_screen.dart';
 
+/// Modern, clean Inventory Screen with real-time Firestore sync and detailed product cards.
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
 
@@ -9,150 +12,133 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
+  String _searchQuery = '';
+  final TextEditingController _searchCtrl = TextEditingController();
 
-  List<Map<String, dynamic>> products = [
-    {"name": "Biscut", "store": "D-Mart", "price": 40, "purchased": "14/3/2026", "expiry": "17/3/2026", "image": "assets/images/bread.png"},
-    {"name": "Milk", "store": "D-Mart", "price": 54, "purchased": "10/3/2026", "expiry": "18/3/2026", "image": "assets/images/milk1.png"},
-    {"name": "Curd", "store": "Reliance", "price": 30, "purchased": "12/3/2026", "expiry": "16/3/2026", "image": "assets/images/curd.png"},
-    {"name": "Oil", "store": "Big Bazaar", "price": 120, "purchased": "12/3/2026", "expiry": "19/3/2026", "image": "assets/images/oil.png"},
-    {"name": "Soap", "store": "Reliance", "price": 125, "purchased": "1/3/2026", "expiry": "1/9/2026", "image": "assets/images/soap.png"},
-    {"name": "Maggi", "store": "Reliance", "price": 45, "purchased": "13/3/2026", "expiry": "21/3/2026", "image": "assets/images/maggi.png"},
-    {"name": "Garam Masala", "store": "Spar", "price": 85, "purchased": "8/3/2026", "expiry": "22/3/2026", "image": "assets/images/masala.png"},
-    {"name": "Biscuits", "store": "D-Mart", "price": 85, "purchased": "5/3/2026", "expiry": "30/3/2026", "image": "assets/images/bread.png"},
-    {"name": "Rice", "store": "Big Bazaar", "price": 300, "purchased": "1/3/2026", "expiry": "1/12/2026", "image": "assets/images/rice.png"},
-    {"name": "Horlicks", "store": "Reliance", "price": 360, "purchased": "2/3/2026", "expiry": "2/12/2026", "image": "assets/images/horlicks.png"},
-    {"name": "Paste", "store": "D-Mart", "price": 120, "purchased": "10/3/2026", "expiry": "10/10/2026", "image": "assets/images/red.png"},
-    {"name": "Nuts", "store": "Reliance", "price": 350, "purchased": "11/3/2026", "expiry": "20/3/2026", "image": "assets/images/nuts.png"},
-    {"name": "Juice", "store": "D-Mart", "price": 40, "purchased": "9/3/2026", "expiry": "25/3/2026", "image": "assets/images/campa.png"},
-    {"name": "Boost", "store": "Local Store", "price": 390, "purchased": "14/3/2026", "expiry": "20/3/2026", "image": "assets/images/boost.png"},
-    {"name": "Oats", "store": "Reliance", "price": 250, "purchased": "13/3/2026", "expiry": "28/3/2026", "image": "assets/images/oats.png"},
-  ];
-
-  void removeProduct(int index) {
-    setState(() {
-      products.removeAt(index);
-    });
+  int _getDaysLeft(String? expiry) {
+    if (expiry == null || expiry.isEmpty) return 999;
+    try {
+      final parts = expiry.split('/');
+      final exp = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+      final today = DateTime.now();
+      return exp.difference(DateTime(today.year, today.month, today.day)).inDays;
+    } catch (_) { return 999; }
   }
 
-  int getDaysLeft(String expiry) {
-    final parts = expiry.split('/');
-    final expDate = DateTime(
-      int.parse(parts[2]),
-      int.parse(parts[1]),
-      int.parse(parts[0]),
-    );
-    return expDate.difference(DateTime.now()).inDays;
-  }
-
-  Color getColor(int days) {
-    if (days <= 5) return Colors.red;
-    if (days <= 14) return Colors.orange;
-    return Colors.green;
+  Color _getStatusColor(int days) {
+    if (days <= 10) return AppColors.error;
+    if (days <= 20) return AppColors.warning;
+    return AppColors.success;
   }
 
   @override
   Widget build(BuildContext context) {
-
-    
-    products.sort((a, b) =>
-        getDaysLeft(a["expiry"]).compareTo(getDaysLeft(b["expiry"])));
-
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("My Products"),
-        backgroundColor: AppColors.primary,
+        title: const Text("My Inventory", style: AppTextStyles.h2),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
       ),
+      body: Column(
+        children: [
+          // ── Search & Filter ──────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.border.withOpacity(0.5))),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                decoration: const InputDecoration(hintText: "Search products...", prefixIcon: Icon(Icons.search, size: 20), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 14)),
+              ),
+            ),
+          ),
 
-      body: ListView.builder(
-        itemCount: products.length,
-        itemBuilder: (_, i) {
-          final p = products[i];
-          final days = getDaysLeft(p["expiry"]);
+          // ── Main List ────────────────────────────────────────────────────
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('products').snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          return Stack(
+                final docs = snapshot.data!.docs;
+                final filtered = docs.where((doc) {
+                  final name = (doc.data() as Map)['name']?.toString().toLowerCase() ?? '';
+                  return name.contains(_searchQuery);
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted.withOpacity(0.3)),
+                        const SizedBox(height: 16),
+                        const Text("No products match your search", style: AppTextStyles.subtitle),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final doc = filtered[index];
+                    final data = doc.data() as Map<String, dynamic>;
+                    return _inventoryItem(context, doc.id, data);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inventoryItem(BuildContext context, String docId, Map<String, dynamic> data) {
+    final days = _getDaysLeft(data['expiryDate'] ?? data['expiry']);
+    final themeColor = _getStatusColor(days);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border.withOpacity(0.3)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(data: data, docId: docId))),
+        onLongPress: () { /* Possible Delete Action */ },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
-
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(12),
-
-                decoration: BoxDecoration(
-                  color: getColor(days).withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: getColor(days)),
-                ),
-
-                child: Row(
+              Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: themeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(18)), child: const Icon(Icons.inventory_2_rounded, color: AppColors.primary, size: 24)),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        p["image"],
-                        width: 70,
-                        height: 70,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-
-                          Text(
-                            p["name"],
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-
-                          Text("Bought from ${p["store"]}"),
-
-                          const SizedBox(height: 6),
-
-                          Text("₹${p["price"]}"),
-                          Text("Purchased: ${p["purchased"]}"),
-                          Text("Expiry: ${p["expiry"]}"),
-
-                          const SizedBox(height: 8),
-
-                          ElevatedButton(
-                            onPressed: () => removeProduct(i),
-                            child: const Text("Use it"),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Text(data['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
+                    const SizedBox(height: 4),
+                    Text(data['expiryDate'] ?? data['expiry'] ?? '', style: AppTextStyles.label),
                   ],
                 ),
               ),
-
-              Positioned(
-                right: 20,
-                top: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: getColor(days),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    "$days days",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: themeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: Text(days < 0 ? "Expired" : "$days d", style: TextStyle(color: themeColor, fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }

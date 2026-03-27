@@ -25,11 +25,11 @@ class _ShopScreenState extends State<ShopScreen> {
   ];
 
   final List<Map<String, dynamic>> products = [
-    {"name": "Milk", "price": 30, "old": 54, "days": 2, "loc": "Tambaram", "image": "assets/images/milk1.png"},
+    {"name": "Milk", "price": 30, "old": 54, "days": 2, "loc": "Tambaram", "image": "assets/images/milk.png"},
     {"name": "Bread", "price": 25, "old": 40, "days": 1, "loc": "Avadi", "image": "assets/images/b.png"},
     {"name": "Oil", "price": 110, "old": 180, "days": 4, "loc": "Adyar", "image": "assets/images/oill.png"},
     {"name": "Soap", "price": 30, "old": 55, "days": 25, "loc": "T Nagar", "image": "assets/images/s.png"},
-    {"name": "Curd", "price": 20, "old": 35, "days": 3, "loc": "Koyambedu", "image": "assets/images/c.png"},
+    {"name": "Curd", "price": 20, "old": 35, "days": 3, "loc": "Thiruvarur", "image": "assets/images/c.png"},
     {"name": "Rice", "price": 70, "old": 120, "days": 10, "loc": "Paravakkottai", "image": "assets/images/rice.png"},
     {"name": "Oats", "price": 45, "old": 80, "days": 8, "loc": "West Tambaram", "image": "assets/images/o.png"},
     {"name": "Paste", "price": 10, "old": 20, "days": 50, "loc": "Tambaram", "image": "assets/images/red.png"},
@@ -71,22 +71,14 @@ class _ShopScreenState extends State<ShopScreen> {
     final displayProducts = getSortedProducts();
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
 
-              Row(
-                children: const [
-                  Icon(Icons.recycling, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text("FRESHLOOP",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16)),
-                ],
-              ),
+            
 
               const SizedBox(height: 20),
 
@@ -97,15 +89,6 @@ class _ShopScreenState extends State<ShopScreen> {
                         TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               ),
 
-              const SizedBox(height: 6),
-
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Browse near-expiry products from sellers around you",
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
 
               const SizedBox(height: 15),
 

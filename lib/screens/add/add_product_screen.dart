@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../widgets/custom_textfield.dart';
+import '../scan/scan_screen.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -13,8 +14,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final nameController = TextEditingController();
   final priceController = TextEditingController();
   final storeController = TextEditingController();
+  final barcodeController = TextEditingController();
 
   DateTime? selectedDate;
+
+  Future<void> _scanBarcode() async {
+    final String? result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const ScanScreen()),
+    );
+    if (result != null && result.isNotEmpty) {
+      setState(() => barcodeController.text = result);
+    }
+  }
 
   Future<void> pickDate() async {
     DateTime? picked = await showDatePicker(
@@ -32,11 +44,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.background,
 
       appBar: AppBar(
         title: const Text("Add Product"),
-        backgroundColor: Colors.white,
+        backgroundColor: const Color.fromARGB(255, 224, 230, 228),
         elevation: 0,
         foregroundColor: Colors.black,
       ),
@@ -78,6 +90,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
               child: Column(
                 children: [
+
+                  // Barcode scan row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomTextField(
+                          label: "Barcode",
+                          hint: "Tap scan icon or enter manually",
+                          controller: barcodeController,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Scan Barcode',
+                        icon: const Icon(Icons.qr_code_scanner,
+                            color: AppColors.primary),
+                        onPressed: _scanBarcode,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
 
                   CustomTextField(
                     label: "Product Name *",
