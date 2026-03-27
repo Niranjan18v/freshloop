@@ -1,59 +1,96 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/app_colors.dart';
+import '../../services/firestore_service.dart';
+import 'edit_product_screen.dart';
+import 'dart:developer' as dev;
 
 /// Minimalist Product Details Screen inspired by Notion/Google Fit.
-/// Provides a clear view of item lifecycle and quick management actions.
-class ProductDetailScreen extends StatelessWidget {
+/// Upgraded with verified doc.id management and Timestamp-aware logic.
+class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> data;
   final String docId;
 
   const ProductDetailScreen({super.key, required this.data, required this.docId});
 
   @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  final FirestoreService _db = FirestoreService();
+
+  // ── 🗑️ DELETE BUSINESS LOGIC (Using Verified doc.id) ───────────────────
+  Future<void> _deleteProduct() async {
+    // Debug print as requested
+    dev.log("── DELETE ATTEMPT ── Product ID: ${widget.docId}");
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Item?"),
+        content: const Text("This action cannot be undone. Are you sure you want to remove this product?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true), 
+            child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _db.deleteProduct(widget.docId);
+        if (mounted) {
+          Navigator.pop(context); // Go back to inventory
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product removed from FreshLoop.')));
+        }
+      } catch (e) {
+        dev.log("Delete failed: $e");
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // ── Logic: Calculate Status ─────────────────────────────────────────────
-    final name = data['name'] ?? 'Unknown Item';
-    final expiry = data['expiryDate'] ?? data['expiry'] ?? 'N/A';
-    const status = "Fresh"; // For the demo details, we use a static placeholder
-    const category = "Fridge & Dairy";
+    // ── 📅 SAFE DATE DISPLAY ───────────────────────────────────────────
+    final rawExpiry = widget.data['expiryDate'] ?? widget.data['expiry'];
+    String displayExpiry = 'N/A';
+    if (rawExpiry is Timestamp) {
+      displayExpiry = DateFormat('dd/MM/yyyy').format(rawExpiry.toDate());
+    } else if (rawExpiry is String) {
+      displayExpiry = rawExpiry;
+    }
+
+    final name = widget.data['name'] ?? 'Unknown Item';
+    final category = widget.data['category'] ?? "General";
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: const Text("Item Details", style: AppTextStyles.h2),
+        title: const Text("Item Details", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF2D3436))),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
             const SizedBox(height: 24),
-            
-            // ── Product Image Card ──────────────────────────────────────────
             Container(
-              width: 160,
-              height: 160,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight.withOpacity(0.4),
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primary.withOpacity(0.1), width: 8),
-              ),
-              child: const Icon(Icons.fastfood_rounded, size: 80, color: AppColors.primary),
+              width: 140, height: 140,
+              decoration: BoxDecoration(color: const Color(0xFF5D8064).withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(Icons.inventory_2_rounded, size: 60, color: Color(0xFF5D8064)),
             ),
-
             const SizedBox(height: 32),
-
-            // ── Name & Category ─────────────────────────────────────────────
-            Text(name, style: AppTextStyles.h1),
+            Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
             const SizedBox(height: 8),
-            Text(category, style: AppTextStyles.subtitle.copyWith(color: AppColors.primary)),
-
+            Text(category.toString().toUpperCase(), style: const TextStyle(color: Color(0xFF5D8064), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
             const SizedBox(height: 40),
-
-            // ── Main Details Grid ───────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: GridView.count(
@@ -62,19 +99,16 @@ class ProductDetailScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 16,
                 crossAxisSpacing: 16,
-                childAspectRatio: 1.5,
+                childAspectRatio: 1.4,
                 children: [
-                  _detailTile("EXPIRY DATE", expiry, Icons.calendar_today_rounded),
-                  _detailTile("STATUS", status, Icons.eco_rounded),
-                  _detailTile("QUANTITY", "1 Unit", Icons.shopping_basket_rounded),
-                  _detailTile("NOTIFICATIONS", "ON", Icons.notifications_active_rounded),
+                  _detailTile("EXPIRY DATE", displayExpiry, Icons.calendar_today_rounded),
+                  _detailTile("PRICE", "₹${widget.data['price'] ?? '0'}", Icons.currency_rupee_rounded),
+                  _detailTile("STATUS", "Locked", Icons.lock_outline_rounded),
+                  _detailTile("ID", widget.docId.substring(0, 5), Icons.tag_rounded),
                 ],
               ),
             ),
-
             const SizedBox(height: 60),
-
-            // ── Management Buttons ──────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -83,11 +117,14 @@ class ProductDetailScreen extends StatelessWidget {
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: AppColors.textPrimary,
+                        foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black12)),
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        dev.log("Opening editor for: ${widget.docId}");
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => EditProductScreen(initialData: widget.data, docId: widget.docId)));
+                      },
                       icon: const Icon(Icons.edit_rounded, size: 20),
                       label: const Text("Edit", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
@@ -96,13 +133,13 @@ class ProductDetailScreen extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error.withOpacity(0.1),
-                        foregroundColor: AppColors.error,
+                        backgroundColor: Colors.red.withOpacity(0.1),
+                        foregroundColor: Colors.red,
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         elevation: 0,
                       ),
-                      onPressed: () {},
+                      onPressed: _deleteProduct,
                       icon: const Icon(Icons.delete_outline_rounded, size: 20),
                       label: const Text("Delete", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
@@ -110,7 +147,6 @@ class ProductDetailScreen extends StatelessWidget {
                 ],
               ),
             ),
-            
             const SizedBox(height: 48),
           ],
         ),
@@ -121,20 +157,14 @@ class ProductDetailScreen extends StatelessWidget {
   Widget _detailTile(String lbl, String val, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppColors.border.withOpacity(0.3))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.black.withOpacity(0.04))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: AppColors.textMuted),
-              const SizedBox(width: 6),
-              Text(lbl, style: AppTextStyles.label),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.textPrimary)),
+          Row(children: [Icon(icon, size: 12, color: Colors.grey), const SizedBox(width: 4), Text(lbl, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))]),
+          const SizedBox(height: 6),
+          Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

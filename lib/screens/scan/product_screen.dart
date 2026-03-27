@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import '../../models/product_model.dart';
+import '../../services/firestore_service.dart';
+import '../../services/notification_service.dart';
 import 'scan_controller.dart';
 
-/// Displays the product details returned after a successful barcode scan.
-/// Allows for real-time editing of the product name if it was not found,
-/// as well as adding an expiry date and saving to Firestore.
+/// The final landing screen after a successful scan.
+/// Updated to parse string dates into Timestamps for Firestore.
 class ProductScreen extends StatefulWidget {
   final ScanResult result;
 
@@ -15,255 +17,121 @@ class ProductScreen extends StatefulWidget {
 }
 
 class _ProductScreenState extends State<ProductScreen> {
-  late TextEditingController _nameController;
-  final TextEditingController _expiryController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isSaving = false;
+  late TextEditingController _nameCtrl;
+  late TextEditingController _priceCtrl;
+  late TextEditingController _expiryCtrl;
+  ProductCategory _selectedCategory = ProductCategory.grocery;
+
+  final FirestoreService _db = FirestoreService();
+  final NotificationService _notifications = NotificationService();
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.result.name);
+    _nameCtrl = TextEditingController(text: widget.result.name);
+    _priceCtrl = TextEditingController(text: widget.result.price.toString());
+    _expiryCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _expiryController.dispose();
+    _nameCtrl.dispose();
+    _priceCtrl.dispose();
+    _expiryCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _saveToFirestore() async {
-    if (!_formKey.currentState!.validate()) return;
+  // ── 🛡️ PRODUCTION SAVE LOGIC: Timestamp Conversion ────────────────────────
+  Future<void> _saveProduct() async {
+    if (_nameCtrl.text.isEmpty || _expiryCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+      return;
+    }
 
-    setState(() => _isSaving = true);
+    // Attempt to parse the date string (format: d/M/yyyy) into a DateTime object
+    DateTime? parsedExpiry;
+    try {
+      parsedExpiry = DateFormat("d/M/yyyy").parseStrict(_expiryCtrl.text.trim());
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Colors.red, content: Text('Invalid date format. Use DD/MM/YYYY.'))
+      );
+      return;
+    }
+
+    final product = Product(
+      id: '', // Firestore auto-generates
+      name: _nameCtrl.text.trim(),
+      barcode: widget.result.barcode,
+      price: double.tryParse(_priceCtrl.text) ?? _priceCtrl.text.trim(),
+      expiryDate: parsedExpiry, // Passing DateTime; model handles Timestamp conversion
+      category: _selectedCategory,
+    );
 
     try {
-      await FirebaseFirestore.instance.collection('products').add({
-        'name': _nameController.text.trim(),
-        'price': widget.result.price,
-        'barcode': widget.result.barcode,
-        'expiryDate': _expiryController.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      await _db.saveProduct(product);
+      await _notifications.notifyOnSave(product);
 
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Product saved successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // Return to home screen
-      Navigator.popUntil(context, (route) => route.isFirst);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('Product added correctly with Timestamp!')));
+      }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving: ${e.toString()}'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Check if the product was explicitly "Not Found"
-    final bool isProductNotFound = widget.result.name == 'Product Not Found';
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Product Details'),
-      ),
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(title: const Text('Add to Inventory')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header Icon ────────────────────────────────────────────────
-              Center(
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundColor: const Color(0xFFE8F5E9),
-                  child: const Icon(
-                    Icons.inventory_2_outlined,
-                    size: 40,
-                    color: Color(0xFF5D8064),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 28),
-
-              // ── Detail Card ────────────────────────────────────────────────
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Product Name (Editable if NOT FOUND) ──────────────────
-                    if (isProductNotFound)
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Product Name *',
-                          labelStyle: TextStyle(color: Color(0xFF5D8064)),
-                          prefixIcon: Icon(Icons.label_outline, size: 20),
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) => 
-                            (value == null || value.isEmpty) ? 'Please enter a name' : null,
-                      )
-                    else
-                      _DetailRow(
-                        icon: Icons.label_outline,
-                        label: 'Product Name',
-                        value: widget.result.name,
-                      ),
-
-                    const SizedBox(height: 24),
-
-                    // ── Expiry Date Input ─────────────────────────────────────
-                    TextFormField(
-                      controller: _expiryController,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Expiry Date *',
-                        hintText: 'Select Date',
-                        labelStyle: TextStyle(color: Color(0xFF5D8064)),
-                        prefixIcon: Icon(Icons.calendar_today, size: 20),
-                        border: OutlineInputBorder(),
-                      ),
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime(2100),
-                        );
-                        if (pickedDate != null) {
-                          setState(() {
-                            _expiryController.text = 
-                                "${pickedDate.day}/${pickedDate.month}/${pickedDate.year}";
-                          });
-                        }
-                      },
-                      validator: (value) => 
-                          (value == null || value.isEmpty) ? 'Expiry date is required' : null,
-                    ),
-
-                    const Divider(height: 48),
-
-                    _DetailRow(
-                      icon: Icons.currency_rupee,
-                      label: 'Price',
-                      value: widget.result.price,
-                    ),
-                    const Divider(height: 28),
-                    _DetailRow(
-                      icon: Icons.qr_code,
-                      label: 'Barcode',
-                      value: widget.result.barcode,
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // ── Save Action Button ──────────────────────────────────────────
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSaving ? null : _saveToFirestore,
-                  icon: _isSaving 
-                      ? const SizedBox(
-                          width: 18, 
-                          height: 18, 
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(_isSaving ? 'Saving...' : 'Save Product'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5D8064),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Container(padding: const EdgeInsets.all(30), decoration: BoxDecoration(color: const Color(0xFF5D8064).withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.inventory_2_rounded, size: 60, color: Color(0xFF5D8064))),
+            const SizedBox(height: 32),
+            _buildField(controller: _nameCtrl, label: 'Product Name', icon: Icons.shopping_basket),
+            const SizedBox(height: 16),
+            _buildField(controller: _priceCtrl, label: 'Price (₹)', icon: Icons.currency_rupee),
+            const SizedBox(height: 16),
+            _buildField(
+              controller: _expiryCtrl,
+              label: 'Expiry Date (DD/MM/YYYY)',
+              icon: Icons.calendar_month,
+              readOnly: true,
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context, 
+                  initialDate: DateTime.now(), 
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)), 
+                  lastDate: DateTime(2030)
+                );
+                if (picked != null) setState(() => _expiryCtrl.text = "${picked.day}/${picked.month}/${picked.year}");
+              },
+            ),
+            const SizedBox(height: 40),
+            SizedBox(width: double.infinity, child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF5D8064), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              onPressed: _saveProduct,
+              child: const Text('Add Product', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            )),
+          ],
         ),
       ),
     );
   }
-}
 
-// ── Private Helper Widget ────────────────────────────────────────────────────
-
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF5D8064)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+  Widget _buildField({required TextEditingController controller, required String label, required IconData icon, bool readOnly = false, VoidCallback? onTap}) {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.black12)),
+      child: TextField(
+        controller: controller,
+        readOnly: readOnly,
+        onTap: onTap,
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: const Color(0xFF5D8064)), border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+      ),
     );
   }
 }

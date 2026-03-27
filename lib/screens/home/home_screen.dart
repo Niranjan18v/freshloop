@@ -1,212 +1,276 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../core/app_colors.dart';
 import '../profile/profile_screen.dart';
 import '../products/products_screen.dart';
-import '../add/add_product_screen.dart';
+import '../shop/shop_screen.dart';
+import '../products/product_detail_screen.dart';
+import '../../widgets/notification_icon.dart';
 
-/// Modern, clean Home Dashboard for FreshLoop.
-/// Features a greeting, summary cards, and a real-time expiring-soon list.
-class HomeScreen extends StatelessWidget {
+/// The Home Screen: showing a preview of inventory (3 urgent, 4 fresh).
+/// Upgraded to include the persistent Notification Center Bell.
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return "Good Morning";
-    if (hour < 17) return "Good Afternoon";
-    return "Good Evening";
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final PageController _controller = PageController();
+  int currentPage = 0;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      currentPage = (currentPage + 1) % 3;
+      _controller.animateToPage(
+        currentPage,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  int _getDaysLeft(String? expiry) {
+    if (expiry == null || expiry.isEmpty) return 999;
+    try {
+      final parts = expiry.split('/');
+      final exp = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+      final today = DateTime.now();
+      return exp.difference(DateTime(today.year, today.month, today.day)).inDays;
+    } catch (_) { return 999; }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF5F7FA),
       body: SafeArea(
-        child: CustomScrollView(
+        child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          slivers: [
-            // ── Header & Greeting ───────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_getGreeting(), style: AppTextStyles.subtitle),
-                        const SizedBox(height: 4),
-                        const Text("Welcome Back!", style: AppTextStyles.h1),
-                      ],
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.primary, width: 2)),
-                        child: const CircleAvatar(
-                          radius: 24,
-                          backgroundColor: AppColors.primaryLight,
-                          child: Icon(Icons.person, color: AppColors.primary),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Summary Cards ──────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('products').snapshots(),
-                builder: (context, snapshot) {
-                  final total = snapshot.data?.docs.length ?? 0;
-                  int soon = 0;
-                  if (snapshot.hasData) {
-                    for (var doc in snapshot.data!.docs) {
-                      // Total count for demo
-                      soon++;
-                    }
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    child: Row(
-                      children: [
-                        _infoCard("Total Items", total.toString(), AppColors.primary, Icons.inventory_2_rounded),
-                        const SizedBox(width: 16),
-                        _infoCard("Expiring Soon", "3", AppColors.warning, Icons.timer_rounded),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // ── Main Content Header ──────────────────────────────────────────
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("Expiring Soon", style: AppTextStyles.h2),
-                    Text("See All", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Real-time Product List ──────────────────────────────────────
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('products').limit(5).snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
-                }
-
-                final docs = snapshot.data!.docs;
-
-                if (docs.isEmpty) {
-                  return SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 40),
-                        child: Column(
-                          children: [
-                            Icon(Icons.eco_outlined, size: 64, color: AppColors.textMuted.withOpacity(0.5)),
-                            const SizedBox(height: 16),
-                            const Text("No waste yet. Keep it up!", style: AppTextStyles.subtitle),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final data = docs[index].data() as Map<String, dynamic>;
-                        return _productItem(data);
-                      },
-                      childCount: docs.length,
-                    ),
+          child: Column(
+            children: [
+              // ── 🏷️ THE CAPSULE HEADER ─────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE4E9E6),
+                    borderRadius: BorderRadius.circular(40),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-                );
-              },
-            ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.eco_rounded, color: Color(0xFF5D8064), size: 28),
+                      const SizedBox(width: 10),
+                      const Text("FRESHLOOP", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black, letterSpacing: 0.5)),
+                      const Spacer(),
+                      // 🔔 Notification Bell Feature
+                      const NotificationIcon(),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+                        child: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.white,
+                          child: const Icon(Icons.person, color: Color(0xFF2D3436), size: 20),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
+              const SizedBox(height: 10),
+
+              // ── 🎢 THE SLIDING CAROUSEL ───────────────────────────────────
+              SizedBox(
+                height: 200,
+                child: PageView(
+                  controller: _controller,
+                  onPageChanged: (i) => setState(() => currentPage = i),
+                  children: [
+                    _slideCard("Your Products", "Manage inventory", "assets/images/products.png", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductsScreen()))),
+                    _slideCard("Shop Deals", "Buy discounted items", "assets/images/sales.png", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen()))),
+                    _slideCard("Expiring Soon", "Use items before waste", "assets/images/expiring_soon.png", () {}),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(3, (i) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  height: 8,
+                  width: currentPage == i ? 18 : 8,
+                  decoration: BoxDecoration(color: currentPage == i ? const Color(0xFF10B981) : Colors.grey.withOpacity(0.4), borderRadius: BorderRadius.circular(10)),
+                )),
+              ),
+
+              const SizedBox(height: 14),
+
+              // ── ⏰ EXPIRING SOON LIST (Limit 3, Sorted) ─────────────────────
+              _sectionHeader("⏰ Expiring Soon"),
+              _streamedInventory(true, 3),
+
+              const SizedBox(height: 14),
+
+              // ── 🟢 FRESH LIST (Limit 4, Sorted) ─────────────────────────────
+              _sectionHeader("🟢 Fresh Products"),
+              _streamedInventory(false, 4),
+
+              const SizedBox(height: 24),
+
+              // ── 🔘 THE "SHOW MORE" BUTTON ──────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF5D8064),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      elevation: 4,
+                      shadowColor: Colors.black.withOpacity(0.5),
+                    ),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductsScreen())),
+                    child: const Text("Show More", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        icon: const Icon(Icons.qr_code_scanner_rounded),
-        label: const Text("Scan Product", style: TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _infoCard(String title, String val, Color color, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 16),
-            Text(val, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
-            Text(title, style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
-          ],
-        ),
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF2D3436))),
       ),
     );
   }
 
-  Widget _productItem(Map<String, dynamic> data) {
+  Widget _streamedInventory(bool isUrgent, int limit) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('products').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        final List<Map<String, dynamic>> allProducts = snapshot.data!.docs.map((doc) => {
+          'id': doc.id,
+          'data': doc.data() as Map<String, dynamic>
+        }).toList();
+
+        final List<Map<String, dynamic>> filteredList = allProducts.where((p) {
+          final Map<String, dynamic> data = p['data'] as Map<String, dynamic>;
+          final days = _getDaysLeft(data['expiryDate'] ?? data['expiry']);
+          return isUrgent ? (days <= 3) : (days > 3);
+        }).toList();
+
+        filteredList.sort((a, b) {
+          final daysA = _getDaysLeft((a['data'] as Map<String, dynamic>)['expiryDate'] ?? (a['data'] as Map<String, dynamic>)['expiry']);
+          final daysB = _getDaysLeft((b['data'] as Map<String, dynamic>)['expiryDate'] ?? (b['data'] as Map<String, dynamic>)['expiry']);
+          return daysA.compareTo(daysB);
+        });
+
+        final List<Map<String, dynamic>> resultList = filteredList.take(limit).toList();
+
+        if (resultList.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          children: resultList.map((p) => _productCard(p['id'].toString(), p['data'] as Map<String, dynamic>, isUrgent)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _productCard(String id, Map<String, dynamic> data, bool isUrgent) {
+    final days = _getDaysLeft(data['expiryDate'] ?? data['expiry']);
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border.withOpacity(0.5)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(16)),
-            child: const Icon(Icons.fastfood_rounded, color: AppColors.primary, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(data['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text("Expires in 3 days", style: AppTextStyles.label.copyWith(color: AppColors.warning)),
-              ],
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(data: data, docId: id))),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: 60, height: 60,
+                color: (isUrgent ? Colors.red : Colors.green).withOpacity(0.08),
+                child: const Icon(Icons.fastfood_rounded, color: Colors.grey, size: 28),
+              ),
             ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(data['name'] ?? 'Item', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                  const SizedBox(height: 4),
+                  Text("$days days left", style: TextStyle(color: isUrgent ? Colors.redAccent : Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                ],
+              ),
+            ),
+            Icon(
+              isUrgent ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
+              color: isUrgent ? Colors.redAccent : Colors.green,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _slideCard(String title, String subtitle, String img, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: Colors.grey.shade300,
+          image: DecorationImage(image: AssetImage(img), fit: BoxFit.cover),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: const LinearGradient(colors: [Colors.black54, Colors.transparent], begin: Alignment.bottomCenter, end: Alignment.topCenter)),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            ],
           ),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
-        ],
+        ),
       ),
     );
   }

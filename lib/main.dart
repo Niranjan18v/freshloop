@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:workmanager/workmanager.dart';
 import 'firebase_options.dart';
 import 'core/app_colors.dart';
+import 'services/notification_service.dart';
+import 'services/expiry_checker.dart';
+import 'background/task_handler.dart';
 
 import 'screens/home/home_screen.dart';
 import 'screens/shop/shop_screen.dart';
@@ -12,6 +16,29 @@ import 'screens/sales/sell_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  
+  // ── 🛡️ NOTIFICATION INITIALIZATION ───────────────────────────────────
+  final notifications = NotificationService();
+  await notifications.init();
+  
+  // ── 🌑 WORKMANAGER REGISTRATION ──────────────────────────────────────d
+  // Initializes background task dispatcher for 'FreshLoop'
+  Workmanager().initialize(
+    callbackDispatcher, 
+    isInDebugMode: true // Set to false for production
+  );
+  
+  // Register a periodic task (runs every 6 hours by default)
+  Workmanager().registerPeriodicTask(
+    "1", 
+    "expiryTask", 
+    frequency: const Duration(hours: 6),
+    constraints: Constraints(networkType: NetworkType.connected)
+  );
+  
+  // Run immediate scan on launch
+  await ExpiryCheckerService().checkExpiry();
+  
   runApp(const MyApp());
 }
 
@@ -25,10 +52,8 @@ class MyApp extends StatelessWidget {
       title: 'FreshLoop',
       theme: ThemeData(
         useMaterial3: true,
-        primaryColor: AppColors.primary,
-        scaffoldBackgroundColor: AppColors.background,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
-        fontFamily: 'Inter', // Typical clean startup font
+        primaryColor: const Color(0xFF5D8064),
+        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
       ),
       home: const MainNavigation(),
     );
@@ -57,29 +82,22 @@ class MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: screens[index],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.5))),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: index,
-          onTap: (i) => setState(() => index = i),
-          backgroundColor: Colors.white,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.textMuted,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontSize: 12),
-          type: BottomNavigationBarType.fixed,
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dashboard"),
-            BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_outlined), label: "Shop"),
-            BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline_rounded), label: "Add"),
-            BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: "Inventory"),
-            BottomNavigationBarItem(icon: Icon(Icons.sell_outlined), label: "Sell"),
-          ],
-        ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: index,
+        onTap: (i) => setState(() => index = i),
+        backgroundColor: const Color(0xFF5D8064),
+        selectedItemColor: const Color(0xFFA8D5BA),
+        unselectedItemColor: Colors.white70,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(Icons.store), label: "Shop"),
+          BottomNavigationBarItem(icon: Icon(Icons.add_circle), label: "Add"),
+          BottomNavigationBarItem(icon: Icon(Icons.inventory), label: "Products"),
+          BottomNavigationBarItem(icon: Icon(Icons.sell), label: "Sell"),
+        ],
       ),
     );
   }
