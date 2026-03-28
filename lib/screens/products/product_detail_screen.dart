@@ -108,7 +108,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(child: Text(name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1F2937)))),
-                      Icon(isSold ? Icons.check_circle_rounded : Icons.inventory_2_outlined, color: isSold ? Colors.green : const Color(0xFF10B981), size: 30),
+                      Hero(
+                        tag: 'product_icon_${widget.docId}',
+                        child: Icon(isSold ? Icons.check_circle_rounded : Icons.inventory_2_outlined, color: isSold ? Colors.green : const Color(0xFF10B981), size: 30)
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),

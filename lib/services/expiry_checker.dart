@@ -69,10 +69,10 @@ class ExpiryCheckerService {
             body: "$name expires today! Use it before waste.",
             type: 'expiry',
           );
-        } else if (difference <= 3) {
+        } else if (difference < 11) {
           await _notifications.sendAndSave(
             title: "⏳ Expiring Soon: $name",
-            body: "$name will expire in $difference days.",
+            body: "The products will expire in $difference days.",
             type: 'expiry',
           );
         }

@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/product_model.dart';
 import '../../services/firestore_service.dart';
 
@@ -60,7 +63,11 @@ class _ShopScreenState extends State<ShopScreen> {
                   if (snapshot.connectionState == ConnectionState.waiting) return const SliverFillRemaining(child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
                   if (snapshot.hasError) return SliverFillRemaining(child: _errorArea(snapshot.error.toString()));
                   final products = snapshot.data ?? [];
-                  final filtered = products.where((p) => !_isFilterActive || p.category == _selectedCategory).toList();
+                  final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                  final filtered = products.where((p) => 
+                    (!_isFilterActive || p.category == _selectedCategory) && 
+                    (p.sellerId != currentUserId) // Hide own products from shop
+                  ).toList();
                   if (filtered.isEmpty) return SliverFillRemaining(child: _emptyArea());
 
                   return SliverPadding(
@@ -179,33 +186,64 @@ class _ShopScreenState extends State<ShopScreen> {
   void _showSellerDetails(Product p) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        title: Row(children: [
-            const Icon(Icons.verified_user, color: Color(0xFF10B981)),
-            const SizedBox(width: 10),
-            const Text("Seller Profile", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-        ]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const CircleAvatar(radius: 40, backgroundColor: Color(0xFFF3F4F6), child: Icon(Icons.person, size: 50, color: Colors.grey)),
-            const SizedBox(height: 16),
-            Text(p.sellerName ?? "FreshLoop User", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
-            const SizedBox(height: 4),
-            const Text("Community Contributor", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
-            const Divider(height: 32),
-            _profileStat(Icons.shopping_bag_outlined, "Items Sold", "12+"),
-            _profileStat(Icons.star_outline_rounded, "Member Rating", "4.9/5"),
-            _profileStat(Icons.location_on_outlined, "Verification", "Certified Profile"),
-            const SizedBox(height: 20),
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.08), borderRadius: BorderRadius.circular(16)), child: const Text("User identifies as a Verified FreshLoop Marketplace Partner.", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Color(0xFF047857), fontWeight: FontWeight.bold))),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CLOSE", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827), letterSpacing: 1))),
-        ],
+      builder: (ctx) => FutureBuilder<DocumentSnapshot>(
+        future: p.sellerId != null ? FirebaseFirestore.instance.collection('users').doc(p.sellerId).get() : null,
+        builder: (context, snapshot) {
+          String name = p.sellerName ?? "FreshLoop User";
+          String phone = "Not provided";
+          String address = "Not provided";
+          String? profileImage;
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const AlertDialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              content: Center(child: CircularProgressIndicator(color: Colors.white)),
+            );
+          }
+
+          if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
+            final userData = snapshot.data!.data() as Map<String, dynamic>;
+            name = userData['name'] ?? name;
+            phone = userData['phone'] ?? phone;
+            address = userData['address'] ?? address;
+            profileImage = userData['profileImage'];
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            title: Row(children: [
+                const Icon(Icons.verified_user, color: Color(0xFF10B981)),
+                const SizedBox(width: 10),
+                const Text("Seller Profile", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            ]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 40, 
+                  backgroundColor: const Color(0xFFF3F4F6), 
+                  backgroundImage: profileImage != null ? MemoryImage(base64Decode(profileImage)) : null,
+                  child: profileImage == null ? const Icon(Icons.person, size: 50, color: Colors.grey) : null,
+                ),
+                const SizedBox(height: 16),
+                Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+                const SizedBox(height: 4),
+                const Text("Community Contributor", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
+                const Divider(height: 32),
+                _profileStat(Icons.person_outline, "Name", name),
+                _profileStat(Icons.phone_outlined, "Phone Number", phone),
+                _profileStat(Icons.location_on_outlined, "Address", address),
+                const SizedBox(height: 20),
+                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.08), borderRadius: BorderRadius.circular(16)), child: const Text("User identifies as a Verified FreshLoop Marketplace Partner.", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Color(0xFF047857), fontWeight: FontWeight.bold))),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CLOSE", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827), letterSpacing: 1))),
+            ],
+          );
+        }
       ),
     );
   }

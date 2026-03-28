@@ -42,10 +42,10 @@ class _SellScreenState extends State<SellScreen> {
   }
 
   Future<void> _processDonate(Product p) async {
-    await _db.updateProduct(p.id, {'status': 'donated'});
+    await _db.finalizeDonation(p);
     if (mounted) {
-      setState(() => selectedTab = 1);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Color(0xFF3B82F6), content: Text('🤝 Success! Shared for donation.')));
+      setState(() => selectedTab = 2);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Color(0xFF3B82F6), content: Text('🤝 Success! Item moved to donation history.')));
     }
   }
 
@@ -129,7 +129,7 @@ class _SellScreenState extends State<SellScreen> {
               
               final products = snapshot.data ?? [];
               List<Product> items = [];
-              if (selectedTab == 0) items = products.where((p) => _getDaysLeft(p.expiryDate) < 28).toList();
+              if (selectedTab == 0) items = products.where((p) => _getDaysLeft(p.expiryDate) < 28 && p.status != ProductStatus.selling && p.status != ProductStatus.donated).toList();
               else if (selectedTab == 2) items = products..sort((a,b) => (b.soldDate ?? DateTime.now()).compareTo(a.soldDate ?? DateTime.now()));
               else items = products;
 
@@ -168,9 +168,44 @@ class _SellScreenState extends State<SellScreen> {
       stream: _db.streamSoldHistory(),
       builder: (context, snapshot) {
         final products = snapshot.data ?? [];
-        double total = 0.0;
-        for (var p in products) total += (double.tryParse(p.listingPrice.toString()) ?? 0.0);
-        return Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF111827), Color(0xFF374151)]), borderRadius: BorderRadius.circular(24)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("TOTAL REVENUE", style: TextStyle(color: Colors.white60, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 2)), const SizedBox(height: 4), Text("₹${total.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900))]));
+        double totalRevenue = 0.0;
+        int totalDonated = 0;
+        
+        for (var p in products) {
+          if (p.status == ProductStatus.donated) {
+            totalDonated++;
+          } else {
+            totalRevenue += (double.tryParse(p.listingPrice.toString()) ?? 0.0);
+          }
+        }
+        
+        return Container(
+          margin: const EdgeInsets.all(16), 
+          padding: const EdgeInsets.all(20), 
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF111827), Color(0xFF374151)]), borderRadius: BorderRadius.circular(24)), 
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start, 
+                children: [
+                  const Text("TOTAL REVENUE", style: TextStyle(color: Colors.white60, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 2)), 
+                  const SizedBox(height: 4), 
+                  Text("₹${totalRevenue.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900))
+                ]
+              ),
+              Container(width: 1, height: 40, color: Colors.white24),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start, 
+                children: [
+                  const Text("TOTAL DONATIONS", style: TextStyle(color: Colors.white60, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 2)), 
+                  const SizedBox(height: 4), 
+                  Text("$totalDonated Items", style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900))
+                ]
+              ),
+            ]
+          )
+        );
       },
     );
   }
@@ -230,8 +265,11 @@ class _SellScreenState extends State<SellScreen> {
                     Expanded(child: ElevatedButton(onPressed: () => _processListing(p), style: ElevatedButton.styleFrom(backgroundColor: urgencyColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 10)), child: const Text("SELL", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)))),
                     const SizedBox(width: 8),
                     Expanded(child: ElevatedButton(onPressed: () => _processDonate(p), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 10)), child: const Text("DONATE", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)))),
-                  ] else
+                  ] else ...[
                     Expanded(child: ElevatedButton(onPressed: () => _processSale(p), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF111827), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 10)), child: const Text("MARK SOLD", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)))),
+                    const SizedBox(width: 8),
+                    Expanded(child: ElevatedButton(onPressed: () => _processDonate(p), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 10)), child: const Text("DONATE", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)))),
+                  ],
                 ],
               ),
             ),

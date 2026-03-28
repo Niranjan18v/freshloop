@@ -31,7 +31,7 @@ class FirestoreService {
 
   Stream<List<Product>> streamActiveProducts() {
     return _userProducts
-        .where('status', isEqualTo: 'active')
+        .where('status', whereIn: ['active', 'selling'])
         .snapshots()
         .map((s) => s.docs.map((d) => Product.fromSnapshot(d)).toList());
   }
@@ -71,6 +71,19 @@ class FirestoreService {
     await _notifications.clearNotificationsForProduct(p.id, p.name);
   }
 
+  // 🤝 FINALIZE DONATION TRANSACTION
+  Future<void> finalizeDonation(Product p) async {
+    final Map<String, dynamic> soldData = p.toMap();
+    soldData['status'] = 'donated';
+    soldData['listingPrice'] = 0.0;
+    soldData['soldDate'] = FieldValue.serverTimestamp();
+
+    await _userSoldHistory.add(soldData);
+    await _userProducts.doc(p.id).delete();
+    await _publicMarketplace.doc(p.id).delete();
+    await _notifications.clearNotificationsForProduct(p.id, p.name);
+  }
+
   /// 🍽️ MARKS AS USED
   Future<void> markAsUsed(Product p) async {
     await _userProducts.doc(p.id).delete();
@@ -100,11 +113,36 @@ class FirestoreService {
           pMap['sellerName'] = _auth.currentUser?.displayName ?? 'FreshLoop User';
           pMap['id'] = id;
           await _publicMarketplace.doc(id).set(pMap);
+          
+          // 🚀 Notify other users
+          await _notifyOthersOfNewItem(pMap);
         }
       }
     }
   }
-  
+
+  Future<void> _notifyOthersOfNewItem(Map<String, dynamic> pMap) async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+    try {
+      final usersSnap = await _db.collection('users').get();
+      for (var userDoc in usersSnap.docs) {
+        if (userDoc.id != currentUserId) {
+          await _db.collection('users').doc(userDoc.id).collection('notifications').add({
+            'title': '🛒 New Item in Shop!',
+            'message': 'The product ${pMap['name']} is available in shop.',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+            'pushed': false, // Allows background task to pick this up and show a local popup
+            'type': 'shop',
+          });
+        }
+      }
+    } catch (e) {
+      dev.log('Failed to notify others: $e');
+    }
+  }
+
   // 🟢 FIXED: Restored correct name for compatibility
   Future<void> deleteSoldRecord(String id) async => await _userSoldHistory.doc(id).delete();
   

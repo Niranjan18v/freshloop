@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // ✅ Added for Haptics
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../profile/profile_screen.dart';
 import '../products/products_screen.dart';
 import '../shop/shop_screen.dart';
-import '../add/add_product_screen.dart'; // 🟢 FIXED: Required for navigation from CTA
+import '../add/add_product_screen.dart'; 
 import '../products/product_detail_screen.dart';
 import '../../widgets/notification_icon.dart';
 
@@ -84,7 +86,28 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Spacer(),
                         const NotificationIcon(),
                         const SizedBox(width: 12),
-                        GestureDetector(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())), child: Hero(tag: 'profile', child: CircleAvatar(radius: 20, backgroundColor: const Color(0xFFE5E7EB), child: ClipRRect(borderRadius: BorderRadius.circular(30), child: const Icon(Icons.person_rounded, color: Colors.grey))))),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())), 
+                          child: Hero(
+                            tag: 'profile', 
+                            child: StreamBuilder<DocumentSnapshot>(
+                              stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
+                              builder: (context, snapshot) {
+                                String? b64Image;
+                                if (snapshot.hasData && snapshot.data!.exists) {
+                                  final data = snapshot.data!.data() as Map<String, dynamic>;
+                                  b64Image = data['profileImage'];
+                                }
+                                return CircleAvatar(
+                                  radius: 20, 
+                                  backgroundColor: const Color(0xFFE5E7EB),
+                                  backgroundImage: b64Image != null ? MemoryImage(base64Decode(b64Image)) : null,
+                                  child: b64Image == null ? ClipRRect(borderRadius: BorderRadius.circular(30), child: const Icon(Icons.person_rounded, color: Colors.grey)) : null,
+                                );
+                              }
+                            )
+                          )
+                        ),
                       ],
                     ),
                   ),
@@ -162,7 +185,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final List<Map<String, dynamic>> products = snapshot.data!.docs.map((doc) => {'id': doc.id, 'data': doc.data() as Map<String, dynamic>}).toList();
         final filtered = products.where((p) {
           final data = p['data'] as Map<String, dynamic>;
-          if ((data['status'] ?? 'active') != 'active') return false;
+          final status = data['status'] ?? 'active';
+          if (status != 'active' && status != 'selling') return false;
           final d = _getDaysLeft(data['expiryDate'] ?? data['expiry']);
           return isUrgent ? (d <= 3) : (d > 3);
         }).toList()..sort((a,b) => _getDaysLeft(a['data']['expiryDate'] ?? a['data']['expiry']).compareTo(_getDaysLeft(b['data']['expiryDate'] ?? b['data']['expiry'])));
@@ -227,10 +251,20 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))]),
       child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(data: data, docId: id))),
+        onTap: () {
+          HapticFeedback.lightImpact(); // ✅ Added Haptics
+          Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(data: data, docId: id)));
+        },
         child: Row(
           children: [
-            Container(height: 60, width: 60, decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(18)), child: Icon(Icons.shopping_bag_outlined, color: color, size: 28)),
+            Hero( // ✅ Added Hero tag
+              tag: 'product_icon_$id',
+              child: Container(
+                height: 60, width: 60, 
+                decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(18)), 
+                child: Icon(Icons.shopping_bag_outlined, color: color, size: 28)
+              ),
+            ),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(data['name'] ?? 'Item', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF111827))), const SizedBox(height: 4), Text(data['store'] ?? 'Supermarket', style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold))])),
             Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Text(days <= 0 ? "EXPIRED" : "$days DAYS LEFT", style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 9, letterSpacing: 0.5))),

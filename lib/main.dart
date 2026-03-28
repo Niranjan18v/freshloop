@@ -1,3 +1,5 @@
+import 'dart:ui';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -37,7 +39,7 @@ Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
 Workmanager().registerPeriodicTask(
 "1",
 "expiryTask",
-frequency: const Duration(hours: 6),
+frequency: const Duration(minutes: 15),
 constraints: Constraints(networkType: NetworkType.connected),
 );
 }
@@ -83,8 +85,8 @@ Widget activeScreen;
           ),
         );
       } else if (snapshot.hasData) {
-        activeScreen = const MainNavigation(
-          key: ValueKey('main_nav'),
+        activeScreen = MainNavigation(
+          key: MainNavigation.navKey,
         );
       } else {
         activeScreen = const LoginScreen(
@@ -119,14 +121,21 @@ Widget activeScreen;
 }
 
 class MainNavigation extends StatefulWidget {
-const MainNavigation({super.key});
+  const MainNavigation({super.key});
 
-@override
-State<MainNavigation> createState() => MainNavigationState();
+  /// 🚀 GLOBAL ACCESS TO NAVIGATION
+  static final GlobalKey<MainNavigationState> navKey = GlobalKey<MainNavigationState>();
+
+  @override
+  State<MainNavigation> createState() => MainNavigationState();
 }
 
 class MainNavigationState extends State<MainNavigation> {
 int index = 0;
+
+void setTabIndex(int i) {
+  if (mounted) setState(() => index = i);
+}
 
 final List<Widget> screens = const [
 HomeScreen(),
@@ -137,17 +146,59 @@ SellScreen(),
 ];
 
 @override
+void initState() {
+  super.initState();
+  NotificationService().startShopListener((title, body) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.shopping_bag_rounded, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text(body, style: const TextStyle(color: Colors.white70)),
+                  ]
+                )
+              )
+            ]
+          ),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          duration: const Duration(seconds: 4),
+          dismissDirection: DismissDirection.up,
+        )
+      );
+    }
+  });
+}
+
+@override
 Widget build(BuildContext context) {
 return Scaffold(
+extendBody: true,
 body: IndexedStack(
 index: index,
 children: screens,
 ),
-bottomNavigationBar: Container(
+bottomNavigationBar: ClipRRect(
+borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+child: BackdropFilter(
+filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+child: Container(
 decoration: BoxDecoration(
+color: Colors.white.withOpacity(0.75),
+border: Border(top: BorderSide(color: Colors.white.withOpacity(0.2), width: 1)),
 boxShadow: [
 BoxShadow(
-color: Colors.black.withOpacity(0.08),
+color: Colors.black.withOpacity(0.05),
 blurRadius: 20,
 offset: const Offset(0, -5),
 )
@@ -155,10 +206,14 @@ offset: const Offset(0, -5),
 ),
 child: BottomNavigationBar(
 currentIndex: index,
-onTap: (i) => setState(() => index = i),
-backgroundColor: Colors.white,
+onTap: (i) {
+HapticFeedback.lightImpact();
+setState(() => index = i);
+},
+backgroundColor: Colors.transparent,
+elevation: 0,
 selectedItemColor: const Color(0xFF5D8064),
-unselectedItemColor: Colors.black26,
+unselectedItemColor: Colors.black38,
 selectedLabelStyle: const TextStyle(
 fontWeight: FontWeight.bold,
 fontSize: 13,
@@ -177,6 +232,8 @@ icon: Icon(Icons.inventory_2_outlined), label: "Products"),
 BottomNavigationBarItem(
 icon: Icon(Icons.sell_outlined), label: "Sell"),
 ],
+),
+),
 ),
 ),
 );

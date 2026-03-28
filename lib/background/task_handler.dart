@@ -22,6 +22,9 @@ void callbackDispatcher() {
       
       // 3. Perform the Expiry Check
       await ExpiryCheckerService().checkExpiry();
+
+      // 4. Remote Notification Sync (New items in shop)
+      await notifications.syncRemoteNotifications();
       
       return Future.value(true);
     } catch (e) {

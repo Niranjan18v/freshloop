@@ -24,6 +24,8 @@ class _ScanScreenState extends State<ScanScreen> {
     super.dispose();
   }
 
+  String? _latestBarcode;
+
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_processing) return;
     final List<Barcode> barcodes = capture.barcodes;
@@ -31,10 +33,23 @@ class _ScanScreenState extends State<ScanScreen> {
     final String? rawValue = barcodes.first.rawValue;
     if (rawValue == null || rawValue.isEmpty) return;
 
+    // Constantly update the latest seen barcode in the frame
+    _latestBarcode = rawValue;
+  }
+
+  Future<void> _processManualScan() async {
+    if (_processing) return;
+    if (_latestBarcode == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No barcode detected in frame yet.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     setState(() => _processing = true);
     await _controller.stop();
     
-    final ScanResult result = await ScanController.lookup(rawValue);
+    final ScanResult result = await ScanController.lookup(_latestBarcode!);
 
     if (!mounted) return;
 
@@ -46,12 +61,13 @@ class _ScanScreenState extends State<ScanScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Product not found: $rawValue'),
+          content: Text('Product not found: $_latestBarcode'),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
       );
       await _controller.start();
+      _latestBarcode = null;
       if (mounted) setState(() => _processing = false);
     }
   }
@@ -155,15 +171,40 @@ class _ScanScreenState extends State<ScanScreen> {
                 ),
               ],
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(30)),
-              child: const Text(
-                'Align barcode within the frame',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-              ),
+            
+            // ── 📸 MANUAL SHUTTER BUTTON ─────────────────────
+            Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(30)),
+                  child: const Text(
+                    'Align barcode and tap below',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                GestureDetector(
+                  onTap: _processManualScan,
+                  child: Container(
+                    height: 80,
+                    width: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                      color: AppColors.primary,
+                      boxShadow: [
+                        BoxShadow(color: AppColors.primary.withOpacity(0.5), blurRadius: 20, spreadRadius: 5)
+                      ]
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.camera_alt_rounded, color: Colors.white, size: 36),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+              ],
             ),
-            const SizedBox(height: 40),
           ],
         ),
       ),

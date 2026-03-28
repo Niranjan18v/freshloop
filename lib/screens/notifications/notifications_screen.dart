@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../models/notification_model.dart';
 import '../../core/app_colors.dart';
+import '../../main.dart'; // 🚀 Added to access MainNavigation Key
 
 /// Private Multi-User Notification Center.
 /// Strictly isolated to the current user's history under 'users/{uid}/notifications'.
@@ -31,7 +32,6 @@ class NotificationsScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         // ── 🛡️ PRIVATE ISOLATED QUERY ──────────────────────────────────────
         stream: notificationRef
-            .where('type', isEqualTo: 'expiry')
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -58,8 +58,9 @@ class NotificationsScreen extends StatelessWidget {
   }
 
   Widget _notificationCard(BuildContext context, AppNotification note, CollectionReference ref) {
-    final themeColor = note.title.contains('❌') ? Colors.redAccent : Colors.orangeAccent;
-    final icon = note.title.contains('❌') ? Icons.error_outline_rounded : Icons.hourglass_top_rounded;
+    final isShop = note.type == 'shop';
+    final themeColor = isShop ? Colors.blueAccent : (note.title.contains('❌') ? Colors.redAccent : Colors.orangeAccent);
+    final icon = isShop ? Icons.shopping_bag_rounded : (note.title.contains('❌') ? Icons.error_outline_rounded : Icons.hourglass_top_rounded);
 
     return Dismissible(
       key: Key(note.id),
@@ -73,7 +74,17 @@ class NotificationsScreen extends StatelessWidget {
       ),
       onDismissed: (_) => ref.doc(note.id).delete(),
       child: GestureDetector(
-        onTap: () => ref.doc(note.id).update({'isRead': true}),
+        onTap: () {
+          // 1. Mark as Read in DB
+          ref.doc(note.id).update({'isRead': true});
+
+          // 2. Specialized Navigation for SHOP ITEMS
+          if (note.type == 'shop') {
+            Navigator.pop(context); // Close notifications
+            
+            MainNavigation.navKey.currentState?.setTabIndex(1);
+          }
+        },
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
