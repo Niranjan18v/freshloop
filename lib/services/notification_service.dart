@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_model.dart';
 import 'dart:developer' as dev;
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 /// Private Multi-User Notification Service.
 /// Each user's notification history is stored under 'users/{uid}/notifications'.
@@ -24,12 +25,23 @@ class NotificationService {
   }
 
   Future<void> init() async {
-    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    if (kIsWeb) return; // ✅ SKIP INITIALIZATION ON WEB
 
-    if (Platform.isAndroid) {
-      await flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    try {
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const InitializationSettings initializationSettings =
+          InitializationSettings(android: initializationSettingsAndroid);
+      await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+      if (Platform.isAndroid) {
+        await flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+      }
+    } catch (e) {
+      dev.log("Notification Service Init Error: $e");
     }
   }
 
@@ -37,8 +49,10 @@ class NotificationService {
   /// Cancels any future alerts and removes historical records for a specific product.
   Future<void> clearNotificationsForProduct(String productId, String productName) async {
     try {
-      // 1. Cancel any active system alerts (using hash of name as id)
-      await flutterLocalNotificationsPlugin.cancel(productName.hashCode);
+      // 1. Cancel any active system alerts on non-web
+      if (!kIsWeb) {
+        await flutterLocalNotificationsPlugin.cancel(productName.hashCode);
+      }
       
       // 2. Remove from private Firestore history
       final snapshot = await _userNotifications
@@ -90,7 +104,9 @@ class NotificationService {
     const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
     
     try {
-      await flutterLocalNotificationsPlugin.show(title.hashCode, title, body, platformDetails);
+      if (!kIsWeb) {
+        await flutterLocalNotificationsPlugin.show(title.hashCode, title, body, platformDetails);
+      }
     } catch (e) {
       dev.log("Notification display failed: $e");
     }
@@ -151,6 +167,8 @@ class NotificationService {
   }
 
   Future<void> _showLocal(String title, String body, String type) async {
+    if (kIsWeb) return; // 🛡️ NO LOCAL ALERTS ON WEB
+
     final String channelId = type == 'shop' ? 'freshloop_shop_channel' : 'freshloop_inventory_channel';
     final String channelName = type == 'shop' ? 'Marketplace Alerts' : 'Inventory Alerts';
 
