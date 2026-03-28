@@ -18,11 +18,11 @@ jobs:
         with:
           flutter-version: 'stable'
 
-      - name: Install dependencies
-        run: flutter pub get
-
       - name: Build Flutter Web
-        run: flutter build web --base-href "/freshloop/"
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build web --release --base-href "/freshloop/"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
