@@ -1,0 +1,39 @@
+﻿Analyzing flutter_application_1...                              
+
+   info - Don't invoke 'print' in production code - lib\auth_service.dart:17:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\auth_service.dart:20:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\auth_service.dart:52:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\auth_service.dart:55:7 - avoid_print
+warning - Unused import: 'core/app_colors.dart' - lib\main.dart:6:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\main.dart:104:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home\home_screen.dart:88:63 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home\home_screen.dart:134:109 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home\home_screen.dart:228:51 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home\home_screen.dart:238:63 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\login_screen.dart:72:78 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\login_screen.dart:133:137 - deprecated_member_use
+warning - Unused import: '../../core/app_colors.dart' - lib\screens\notifications\notifications_screen.dart:5:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\notifications\notifications_screen.dart:78:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\notifications\notifications_screen.dart:79:71 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\notifications\notifications_screen.dart:85:59 - deprecated_member_use
+warning - Unused import: '../../core/app_colors.dart' - lib\screens\products\edit_product_screen.dart:4:8 - unused_import
+warning - Unused import: '../../core/app_colors.dart' - lib\screens\products\product_detail_screen.dart:4:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\products\product_detail_screen.dart:86:72 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\products\product_detail_screen.dart:136:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\products\product_detail_screen.dart:160:134 - deprecated_member_use
+warning - Unused import: '../../core/app_colors.dart' - lib\screens\products\products_screen.dart:2:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\products\products_screen.dart:124:134 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\products\products_screen.dart:135:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\products\products_screen.dart:142:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\profile\profile_screen.dart:37:59 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\profile\profile_screen.dart:144:52 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor or activeTrackColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\screens\profile\profile_screen.dart:152:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\sales\sell_screen.dart:118:67 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\sales\sell_screen.dart:168:58 - deprecated_member_use
+   info - The private field _selectedCategory could be 'final' - lib\screens\scan\product_screen.dart:23:19 - prefer_final_fields
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\scan\product_screen.dart:93:115 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\scan\scan_screen.dart:80:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\scan\scan_screen.dart:150:49 - deprecated_member_use
+warning - Unused import: 'package:firebase_auth/firebase_auth.dart' - lib\services\firestore_service.dart:2:8 - unused_import
+warning - Unused import: '../models/notification_model.dart' - lib\services\notification_service.dart:4:8 - unused_import
+

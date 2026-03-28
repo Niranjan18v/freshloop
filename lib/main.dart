@@ -3,7 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:workmanager/workmanager.dart';
 import 'firebase_options.dart';
-import 'core/app_colors.dart';
 import 'services/notification_service.dart';
 import 'services/expiry_checker.dart';
 import 'background/task_handler.dart';
@@ -19,16 +18,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   
-  // ── 🛡️ NOTIFICATION INITIALIZATION ───────────────────────────────────
   final notifications = NotificationService();
   await notifications.init();
   
-  // ── 🌑 WORKMANAGER REGISTRATION ──────────────────────────────────────
-  Workmanager().initialize(
-    callbackDispatcher, 
-    isInDebugMode: true 
-  );
-  
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
   Workmanager().registerPeriodicTask(
     "1", 
     "expiryTask", 
@@ -36,10 +29,8 @@ Future<void> main() async {
     constraints: Constraints(networkType: NetworkType.connected)
   );
   
-  // Run immediate scan on launch
-  await ExpiryCheckerService().checkExpiry();
-  
   runApp(const MyApp());
+  ExpiryCheckerService().checkExpiry();
 }
 
 class MyApp extends StatelessWidget {
@@ -56,21 +47,42 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF5F7FA),
         appBarTheme: const AppBarTheme(elevation: 0, backgroundColor: Colors.transparent),
       ),
-      // ── 🛡️ AUTHENTICATION GATE ───────────────────────────────────────
-      // Automatically switches between Login and Home based on Firebase Auth State.
+      // ── 🛡️ ADVANCED AUTH GATE WITH SMOOTH TRANSITION ─────────────────────
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
-          // While checking for the session...
+          Widget activeScreen;
+
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF5D8064))));
+            activeScreen = const Scaffold(key: ValueKey('loading'), body: Center(child: CircularProgressIndicator(color: Color(0xFF5D8064))));
+          } else if (snapshot.hasData) {
+            // User is logged in
+            activeScreen = const MainNavigation(key: ValueKey('main_nav'));
+          } else {
+            // User is logged out
+            activeScreen = const LoginScreen(key: ValueKey('login'));
           }
-          // If a user is logged in, show the App Navigation
-          if (snapshot.hasData) {
-            return const MainNavigation();
-          }
-          // Otherwise, show the Login Screen
-          return const LoginScreen();
+
+          // 🎭 USE ANIMATED SWITCHER FOR PREMIUM "SMOOTH" NAVIGATION 🎭
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 600),
+            switchInCurve: Curves.easeInOutCubic,
+            switchOutCurve: Curves.easeInOutCubic,
+            transitionBuilder: (child, animation) {
+              // Smooth Fade + Scale transition
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.05),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: activeScreen,
+          );
         },
       ),
     );
@@ -98,10 +110,13 @@ class MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: screens[index],
+      body: IndexedStack(
+        index: index,
+        children: screens,
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -10))],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -5))],
         ),
         child: BottomNavigationBar(
           currentIndex: index,

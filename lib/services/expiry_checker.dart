@@ -1,59 +1,72 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'notification_service.dart';
 import 'dart:developer' as dev;
 
-/// Professional Expiry Checker Service for FreshLoop.
-/// Categorizes all alerts as 'expiry' for persistent history filtering.
+/// Private Multi-User Expiry Checker Service.
+/// Scans only the current authenticated user's 'users/{uid}/products' collection.
 class ExpiryCheckerService {
   static final ExpiryCheckerService _instance = ExpiryCheckerService._internal();
   factory ExpiryCheckerService() => _instance;
   ExpiryCheckerService._internal();
 
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final _db = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
   final NotificationService _notifications = NotificationService();
 
-  /// Scans Firestore and triggers both system alerts and 'expiry' history entries.
+  /// Scans the PRIVATE product library and triggers localized alerts.
   Future<void> checkExpiry() async {
-    dev.log("── 🛡️ STARTING EXPIRY-TAGGED SCAN ───────────────────────────────");
+    final user = _auth.currentUser;
+    if (user == null) {
+      dev.log("── 🛡️ SCAN SKIPPED: NO AUTHENTICATED USER ───────────────────────");
+      return;
+    }
+
+    dev.log("── 🛡️ STARTING PRIVATE SCAN FOR USER: ${user.uid} ──────────────");
     
     try {
-      final snapshot = await _db.collection('products').get();
+      // 🏰 TARGET PRIVATE SUBCOLLECTION
+      final snapshot = await _db.collection('users').doc(user.uid).collection('products').get();
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final name = data['name'] ?? 'Unknown Item';
-        final expiryStr = data['expiryDate'] ?? data['expiry'];
-
-        if (expiryStr == null) continue;
+        
+        // 📅 HYBRID DATE PARSING
+        final rawExpiry = data['expiryDate'] ?? data['expiry'];
+        if (rawExpiry == null) continue;
 
         DateTime? expiryDate;
-        try {
-          if (expiryStr.contains('-')) {
-            expiryDate = DateTime.parse(expiryStr);
-          } else if (expiryStr.contains('/')) {
-            final parts = expiryStr.split('/');
-            expiryDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-          }
-        } catch (_) { continue; }
+        if (rawExpiry is Timestamp) {
+          expiryDate = rawExpiry.toDate();
+        } else if (rawExpiry is String && rawExpiry.isNotEmpty) {
+          try {
+            if (rawExpiry.contains('/')) {
+              final parts = rawExpiry.split('/');
+              expiryDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+            } else {
+              expiryDate = DateTime.parse(rawExpiry);
+            }
+          } catch (_) { continue; }
+        }
 
         if (expiryDate == null) continue;
 
         final normalizedExpiry = DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
         final difference = normalizedExpiry.difference(today).inDays;
 
-        // ── PERSISTENT ALERT LOGIC (Safely Tagged as 'expiry') ───────────────────
         if (difference < 0) {
           await _notifications.sendAndSave(
             title: "❌ Expired: $name",
-            body: "$name has already expired. Remove it immediately!",
+            body: "$name has expired. Remove it from your inventory.",
             type: 'expiry',
           );
         } else if (difference == 0) {
           await _notifications.sendAndSave(
             title: "⚠️ Expires Today: $name",
-            body: "$name is expiring today. Use it before it goes to waste!",
+            body: "$name expires today! Use it before waste.",
             type: 'expiry',
           );
         } else if (difference <= 3) {
@@ -64,9 +77,9 @@ class ExpiryCheckerService {
           );
         }
       }
-      dev.log("── ✅ EXPIRY SCAN COMPLETE ──────────────────────────────────");
+      dev.log("── ✅ PRIVATE SCAN COMPLETE ──────────────────────────────────");
     } catch (e) {
-      dev.log("Expiry Scan Error: $e");
+      dev.log("Critical Expiry Scan Error: $e");
     }
   }
 }

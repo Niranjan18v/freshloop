@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../auth_service.dart';
+import '../auth_service.dart';
 import 'signup_screen.dart';
-import '../../core/app_colors.dart';
+import '../core/app_colors.dart';
+import '../main.dart'; // Import to access MainNavigation explicitly if needed
 
 /// Modern Login Screen for FreshLoop with high-end aesthetic.
+/// Fixed navigation logic to ensure instant transition to the dashboard.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -25,17 +27,32 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => isLoading = true);
 
     try {
-      await _auth.signIn(
-        emailController.text.trim(),
-        passwordController.text.trim(),
-      );
-      // MainNavigation will catch the auth change and move forward
+      final email = emailController.text.trim();
+      final password = passwordController.text.trim();
+
+      // 1. Authenticate with Firebase
+      final user = await _auth.signIn(email, password);
+      
+      if (user != null && mounted) {
+        // 2. 🚦 INSTANT ACTIVE REDIRECT
+        // We go home IMMEDIATELY on success to guarantee no "stuck" logins.
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      setState(() => isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: AppColors.error, content: Text("Login Failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '')}")),
+        SnackBar(
+          backgroundColor: AppColors.error, 
+          content: Text("Login Failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '')}")
+        ),
       );
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -69,9 +86,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 20),
                 _buildField(controller: passwordController, label: "Password", icon: Icons.lock_outline, obscure: true),
                 
-                const SizedBox(height: 10),
-                Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () {}, child: const Text("Forgot Password?", style: TextStyle(color: Color(0xFF5D8064), fontWeight: FontWeight.bold)))),
-
                 const SizedBox(height: 40),
                 SizedBox(
                   width: double.infinity,
@@ -85,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       elevation: 0,
                     ),
                     child: isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text("Log In", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                 ),

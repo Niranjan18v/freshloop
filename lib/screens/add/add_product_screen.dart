@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // 🟢 FIXED: Required for DateFormat
 import '../../core/app_colors.dart';
+import '../../models/product_model.dart';
+import '../../services/firestore_service.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/custom_textfield.dart';
 import '../scan/scan_screen.dart';
 
+/// Screen to manually add products to the inventory database.
+/// features a Premium Scanner Option and manual entry fallback.
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
 
@@ -15,8 +21,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final priceController = TextEditingController();
   final storeController = TextEditingController();
   final barcodeController = TextEditingController();
+  
+  final FirestoreService _db = FirestoreService();
+  final NotificationService _notifications = NotificationService();
 
   DateTime? selectedDate;
+  bool isLoading = false;
 
   Future<void> _scanBarcode() async {
     final String? result = await Navigator.push<String>(
@@ -31,9 +41,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future<void> pickDate() async {
     DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: DateTime.now().add(const Duration(days: 7)),
       firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
+      lastDate: DateTime(2035),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(primary: Color(0xFF5D8064)),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
@@ -41,159 +59,151 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
+  // ── 🛡️ SAVE PRODUCT LOGIC ───────────────────────────────────────────
+  Future<void> _handleSave() async {
+    if (nameController.text.trim().isEmpty || selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter product name and expiry date.")),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      final product = Product(
+        id: "", 
+        name: nameController.text.trim(),
+        barcode: barcodeController.text.trim(),
+        price: double.tryParse(priceController.text) ?? 0.0,
+        expiryDate: selectedDate!,
+        createdAt: DateTime.now(),
+      );
+
+      await _db.saveProduct(product);
+      await _notifications.notifyOnSave(product);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Colors.green, content: Text("Item added successfully!")),
+        );
+        nameController.clear();
+        priceController.clear();
+        barcodeController.clear();
+        storeController.clear();
+        setState(() => selectedDate = null);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.red, content: Text("Failed to save: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text("Add Product"),
-        backgroundColor: const Color.fromARGB(255, 224, 230, 228),
+        title: const Text("Stock Inventory", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
         elevation: 0,
-        foregroundColor: Colors.black,
+        backgroundColor: Colors.white,
+        centerTitle: false,
       ),
-
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         child: Column(
           children: [
-
-        
-            Row(
-              children: const [
-                CircleAvatar(
-                  backgroundColor: Color(0xffE8F5E9),
-                  child: Icon(Icons.inventory, color: AppColors.primary),
+            // 🏮 PREMIUM SCANNER OPTION
+            GestureDetector(
+              onTap: _scanBarcode,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF5D8064), Color(0xFF4A6851)]),
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [BoxShadow(color: const Color(0xFF5D8064).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
                 ),
-                SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
                   children: [
-                    Text("Add Product",
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text("Manually add a product to your inventory",
-                        style: TextStyle(color: Colors.grey)),
+                    Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 40)),
+                    const SizedBox(height: 16),
+                    const Text("QUICK SCANNER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5)),
+                    const SizedBox(height: 4),
+                    Text("Auto-detect product details instantly", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13, fontWeight: FontWeight.bold)),
                   ],
-                )
-              ],
+                ),
+              ),
             ),
 
-            const SizedBox(height: 20),
-
-          
+            const SizedBox(height: 32),
+            
+            // 📝 MANUAL ENTRY FORM
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 25, offset: const Offset(0, 8))]),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // Barcode scan row
+                  const Row(children: [Icon(Icons.edit_note_rounded, color: Colors.grey, size: 20), SizedBox(width: 8), Text("Manual Entry Form", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.grey))]),
+                  const SizedBox(height: 24),
+                  
+                  CustomTextField(label: "Product Title*", hint: "e.g. Greek Yogurt", controller: nameController),
+                  const SizedBox(height: 18),
+                  
+                  CustomTextField(label: "Barcode Value", hint: "Manually enter or Scan", controller: barcodeController),
+                  const SizedBox(height: 18),
+                  
                   Row(
                     children: [
-                      Expanded(
-                        child: CustomTextField(
-                          label: "Barcode",
-                          hint: "Tap scan icon or enter manually",
-                          controller: barcodeController,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Scan Barcode',
-                        icon: const Icon(Icons.qr_code_scanner,
-                            color: AppColors.primary),
-                        onPressed: _scanBarcode,
-                      ),
+                      Expanded(child: CustomTextField(label: "Price (₹)", hint: "0.00", controller: priceController, keyboard: TextInputType.number)),
+                      const SizedBox(width: 16),
+                      Expanded(child: CustomTextField(label: "Store", hint: "Optional", controller: storeController)),
                     ],
                   ),
+                  const SizedBox(height: 24),
 
-                  const SizedBox(height: 14),
-
-                  CustomTextField(
-                    label: "Product Name *",
-                    hint: "e.g. Amul Milk 1L",
-                    controller: nameController,
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  CustomTextField(
-                    label: "Price (₹) *",
-                    hint: "0",
-                    controller: priceController,
-                    keyboard: TextInputType.number,
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  CustomTextField(
-                    label: "Store Name",
-                    hint: "e.g. D-Mart, Andheri",
-                    controller: storeController,
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // 📅 DATE PICKER
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Expiry Date *",
-                          style: TextStyle(fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 6),
-
-                      GestureDetector(
-                        onTap: pickDate,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xffF4F6F8),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.calendar_today,
-                                  size: 18, color: Colors.grey),
-                              const SizedBox(width: 10),
-                              Text(
-                                selectedDate == null
-                                    ? "Pick expiry date"
-                                    : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-                                style: const TextStyle(color: Colors.grey),
-                              )
-                            ],
-                          ),
-                        ),
+                  const Text("Shelf Life Expiry", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.grey, letterSpacing: 1.5)),
+                  const SizedBox(height: 12),
+                  
+                  GestureDetector(
+                    onTap: pickDate,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: selectedDate != null ? const Color(0xFF5D8064).withOpacity(0.2) : Colors.black12)),
+                      child: Row(
+                        children: [
+                          Icon(Icons.event_available_rounded, size: 20, color: selectedDate != null ? const Color(0xFF5D8064) : Colors.grey),
+                          const SizedBox(width: 12),
+                          Text(selectedDate == null ? "Set Expiry Date*" : DateFormat('dd MMM yyyy').format(selectedDate!), style: TextStyle(color: selectedDate != null ? Colors.black : Colors.grey, fontWeight: FontWeight.w900, fontSize: 14)),
+                          const Spacer(),
+                          const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
 
-                  const SizedBox(height: 20),
-
+                  const SizedBox(height: 32),
                   
                   SizedBox(
                     width: double.infinity,
+                    height: 60,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: () {
-                        
-                      },
-                      child: const Text("Add to Inventory"),
+                      onPressed: isLoading ? null : _handleSave,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF5D8064), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 12, shadowColor: const Color(0xFF5D8064).withOpacity(0.3)),
+                      child: isLoading 
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text("SAVE TO PANTRY", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1)),
                     ),
-                  )
+                  ),
                 ],
               ),
-            )
+            ),
           ],
         ),
       ),

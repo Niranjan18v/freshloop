@@ -1,27 +1,33 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-/// Supported item categories in the FreshLoop ecosystem.
-enum ProductCategory {
-  grocery,
-  dairy,
-  snacks,
-  meat,
-  vegetables,
-  drinks,
-  other
-}
+/// Supported item categories.
+enum ProductCategory { grocery, dairy, snacks, meat, vegetables, drinks, other }
+
+/// Supported product states for the marketplace lifecycle.
+enum ProductStatus { active, selling, donated, sold }
 
 /// A structured model for a grocery product.
-/// Refactored to include 'doc.id' and store 'expiryDate' as Firestore Timestamp.
+/// Enhanced with seller identification for the Public Marketplace.
 class Product {
   final String id;
   final String name;
   final String barcode;
   final dynamic price; 
-  final DateTime expiryDate; // Stored as Timestamp in Firestore for optimal sorting/querying
+  final DateTime expiryDate;
+  final DateTime purchasedDate;
   final ProductCategory category;
+  final String store;
+  final String imageUrl;
   final DateTime createdAt;
+  
+  final ProductStatus status;
+  final dynamic listingPrice;
+  final DateTime? soldDate;
+
+  // 🌍 SELLER IDENTIFICATION (FOR PUBLIC MARKETPLACE)
+  final String? sellerId;
+  final String? sellerName;
 
   Product({
     required this.id,
@@ -29,71 +35,102 @@ class Product {
     required this.barcode,
     required this.price,
     required this.expiryDate,
+    DateTime? purchasedDate,
     this.category = ProductCategory.grocery,
+    this.store = 'Unknown Store',
+    this.imageUrl = '',
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+    this.status = ProductStatus.active,
+    this.listingPrice = 0.0,
+    this.soldDate,
+    this.sellerId,
+    this.sellerName,
+  })  : purchasedDate = purchasedDate ?? DateTime.now(),
+        createdAt = createdAt ?? DateTime.now();
 
-  // Helper to get string version for UI (DD/MM/YYYY)
   String get expiryDateString => DateFormat('dd/MM/yyyy').format(expiryDate);
+  String get purchasedDateString => DateFormat('dd/MM/yyyy').format(purchasedDate);
 
-  // Convert Firestore Snapshot to Product
   factory Product.fromSnapshot(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
-    // ── 📅 HYBRID EXPIRY PARSING ──────────────────────────────────────────
-    // Supports both legacy 'String' dates and new 'Timestamp' fields.
-    final rawExpiry = data['expiryDate'] ?? data['expiry'];
-    DateTime parsedExpiry = DateTime.now();
+    try {
+      final data = doc.data() as Map<String, dynamic>;
+      
+      // 📅 EXPIRY
+      final rawExpiry = data['expiryDate'] ?? data['expiry'];
+      DateTime parsedExpiry = DateTime.now();
+      if (rawExpiry is Timestamp) parsedExpiry = rawExpiry.toDate();
+      else if (rawExpiry is String) {
+        try {
+          if (rawExpiry.contains('-')) parsedExpiry = DateTime.parse(rawExpiry);
+          else if (rawExpiry.contains('/')) {
+            final p = rawExpiry.split('/');
+            parsedExpiry = DateTime(int.parse(p[2]), int.parse(p[1]), int.parse(p[0]));
+          }
+        } catch (_) {}
+      }
 
-    if (rawExpiry is Timestamp) {
-      parsedExpiry = rawExpiry.toDate();
-    } else if (rawExpiry is String) {
-      try {
-        if (rawExpiry.contains('-')) {
-          parsedExpiry = DateTime.parse(rawExpiry);
-        } else if (rawExpiry.contains('/')) {
-          final parts = rawExpiry.split('/');
-          parsedExpiry = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-        }
-      } catch (_) {}
+      // 📅 PURCHASED
+      final rawPurchased = data['purchasedDate'];
+      DateTime parsedPurchased = DateTime.now();
+      if (rawPurchased is Timestamp) parsedPurchased = rawPurchased.toDate();
+
+      // 🏷️ STATUS
+      final String? st = data['status'];
+      final ProductStatus status = ProductStatus.values.firstWhere(
+        (e) => e.name == st, orElse: () => ProductStatus.active
+      );
+
+      // 💰 PRICES
+      final rawListing = data['listingPrice'];
+      
+      // 📅 SOLD DATE
+      DateTime? soldDate;
+      final rawSold = data['soldDate'];
+      if (rawSold is Timestamp) soldDate = rawSold.toDate();
+
+      return Product(
+        id: doc.id,
+        name: data['name'] ?? 'Unknown Item',
+        barcode: data['barcode'] ?? '',
+        price: data['price'] ?? 0.0,
+        expiryDate: parsedExpiry,
+        purchasedDate: parsedPurchased,
+        category: _parseCategory(data['category']),
+        store: data['store'] ?? 'Supermarket',
+        imageUrl: data['imageUrl'] ?? '',
+        createdAt: (data['createdAt'] is Timestamp) ? (data['createdAt'] as Timestamp).toDate() : DateTime.now(),
+        status: status,
+        listingPrice: rawListing ?? 0.0,
+        soldDate: soldDate,
+        sellerId: data['sellerId'],
+        sellerName: data['sellerName'],
+      );
+    } catch (e) {
+      return Product(id: doc.id, name: "Error Loading Item", barcode: "", price: 0, expiryDate: DateTime.now());
     }
-
-    // ── 🛡️ SAFE PRICE PARSING ──────────────────────────────────────────────
-    final rawPrice = data['price'];
-    dynamic parsedPrice = 'N/A';
-    if (rawPrice != null) {
-      if (rawPrice is num) { parsedPrice = rawPrice; } 
-      else if (rawPrice is String && rawPrice.isNotEmpty) { parsedPrice = rawPrice; }
-    }
-
-    return Product(
-      id: doc.id, // Correctly including Firestore Document ID
-      name: data['name'] ?? 'Unknown',
-      barcode: data['barcode'] ?? '',
-      price: parsedPrice,
-      expiryDate: parsedExpiry,
-      category: _parseCategory(data['category']),
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-    );
   }
 
-  // Convert Product to Firestore Map
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'barcode': barcode,
       'price': price,
-      'expiryDate': Timestamp.fromDate(expiryDate), // Persist as Timestamp for optimal performance
+      'expiryDate': Timestamp.fromDate(expiryDate),
+      'purchasedDate': Timestamp.fromDate(purchasedDate),
       'category': category.name,
+      'store': store,
+      'imageUrl': imageUrl,
       'createdAt': FieldValue.serverTimestamp(),
+      'status': status.name,
+      'listingPrice': listingPrice,
+      'soldDate': soldDate != null ? Timestamp.fromDate(soldDate!) : null,
+      'sellerId': sellerId,
+      'sellerName': sellerName,
     };
   }
 
   static ProductCategory _parseCategory(String? cat) {
     if (cat == null) return ProductCategory.grocery;
-    return ProductCategory.values.firstWhere(
-      (e) => e.name == cat.toLowerCase(),
-      orElse: () => ProductCategory.grocery,
-    );
+    return ProductCategory.values.firstWhere((e) => e.name == cat.toLowerCase(), orElse: () => ProductCategory.grocery);
   }
 }

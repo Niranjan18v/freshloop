@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../auth_service.dart';
-import 'home/home_screen.dart';
-import '../../core/app_colors.dart';
+import '../auth_service.dart';
+import '../core/app_colors.dart';
+import '../main.dart'; // To access MainNavigation directly
 
+/// Modern Signup Screen for FreshLoop.
+/// Optimized with explicit redirect logic to ensure instant entry to Home after account creation.
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -22,51 +24,59 @@ class _SignupScreenState extends State<SignupScreen> {
   final AuthService _auth = AuthService();
   bool isLoading = false;
 
+  // ── 🛡️ PRODUCTION SIGNUP LOGIC ───────────────────────────────────────
   void signup() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => isLoading = true);
 
     try {
+      final email = emailController.text.trim();
+      final password = passwordController.text.trim();
+      final name = nameController.text.trim();
+      final phone = phoneController.text.trim();
+      final address = addressController.text.trim();
+
+      // 1. Create account (automatically logs in inside Firebase)
       final user = await _auth.register(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-        name: nameController.text.trim(),
-        phone: phoneController.text.trim(),
-        address: addressController.text.trim(),
+        email: email,
+        password: password,
+        name: name,
+        phone: phone,
+        address: address,
       );
 
-      setState(() => isLoading = false);
-
-      if (user != null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Account created successfully!")),
-        );
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+      if (user != null && mounted) {
+        // 🚦 MANUALLY REDIRECT TO HOME IMMEDIATELY
+        // This ensures the transition happens right away even if AuthGate stream is slow.
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
           (route) => false,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Colors.green, content: Text("Welcome to FreshLoop! Account created successfully.")),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Signup Failed: ${e.toString()}")),
+        SnackBar(backgroundColor: AppColors.error, content: Text("Signup Failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '')}")),
       );
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: const Text("Create Account", style: AppTextStyles.h2),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        title: const Text("Create Account", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -76,12 +86,11 @@ class _SignupScreenState extends State<SignupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Join FreshLoop", style: AppTextStyles.h1),
+                const Text("Join FreshLoop", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF2D3436))),
                 const SizedBox(height: 8),
-                const Text("Start managing your inventory smarter.", style: AppTextStyles.subtitle),
+                const Text("Start managing your inventory smarter.", style: TextStyle(color: Colors.black54, fontSize: 15)),
                 const SizedBox(height: 32),
 
-                // Name Field
                 _buildLabel("Full Name"),
                 TextFormField(
                   controller: nameController,
@@ -90,7 +99,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Phone Field
                 _buildLabel("Phone Number"),
                 TextFormField(
                   controller: phoneController,
@@ -100,7 +108,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Email Field
                 _buildLabel("Email Address"),
                 TextFormField(
                   controller: emailController,
@@ -114,7 +121,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Password Field
                 _buildLabel("Password"),
                 TextFormField(
                   controller: passwordController,
@@ -124,7 +130,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Address Field
                 _buildLabel("Address / Location"),
                 TextFormField(
                   controller: addressController,
@@ -134,21 +139,20 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 40),
 
-                // Signup Button
                 SizedBox(
                   width: double.infinity,
-                  height: 56,
+                  height: 60,
                   child: ElevatedButton(
                     onPressed: isLoading ? null : signup,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: const Color(0xFF5D8064),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       elevation: 0,
                     ),
                     child: isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("Sign Up", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text("Sign Up", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -159,11 +163,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: RichText(
                       text: const TextSpan(
                         text: "Already have an account? ",
-                        style: TextStyle(color: AppColors.textSecondary),
+                        style: TextStyle(color: Colors.black54, fontSize: 15),
                         children: [
                           TextSpan(
                             text: "Login",
-                            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: Color(0xFF5D8064), fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -181,34 +185,20 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget _buildLabel(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, left: 4),
-      child: Text(label, style: AppTextStyles.label),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54)),
     );
   }
 
   InputDecoration _inputDecoration(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: AppColors.textMuted, size: 20),
+      prefixIcon: Icon(icon, color: Colors.grey, size: 20),
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.error),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF5D8064), width: 1.5)),
     );
   }
 }
-

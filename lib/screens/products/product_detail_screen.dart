@@ -4,10 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/app_colors.dart';
 import '../../services/firestore_service.dart';
 import 'edit_product_screen.dart';
-import 'dart:developer' as dev;
 
-/// Minimalist Product Details Screen inspired by Notion/Google Fit.
-/// Upgraded with verified doc.id management and Timestamp-aware logic.
+/// Clean, high-performance Product Detail Screen.
+/// Upgraded to display transactional data like 'Sold Date' and 'Listing Price'.
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> data;
   final String docId;
@@ -21,22 +20,15 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final FirestoreService _db = FirestoreService();
 
-  // ── 🗑️ DELETE BUSINESS LOGIC (Using Verified doc.id) ───────────────────
   Future<void> _deleteProduct() async {
-    // Debug print as requested
-    dev.log("── DELETE ATTEMPT ── Product ID: ${widget.docId}");
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Delete Item?"),
-        content: const Text("This action cannot be undone. Are you sure you want to remove this product?"),
+        title: const Text("Delete Item?", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Are you sure you want to remove this product?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true), 
-            child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
         ],
       ),
     );
@@ -44,129 +36,160 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (confirmed == true) {
       try {
         await _db.deleteProduct(widget.docId);
-        if (mounted) {
-          Navigator.pop(context); // Go back to inventory
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product removed from FreshLoop.')));
-        }
+        if (mounted) Navigator.pop(context);
       } catch (e) {
-        dev.log("Delete failed: $e");
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ── 📅 SAFE DATE DISPLAY ───────────────────────────────────────────
+    // 📅 DATE PARSING
     final rawExpiry = widget.data['expiryDate'] ?? widget.data['expiry'];
+    final rawSold = widget.data['soldDate'];
+    final rawPurchased = widget.data['purchasedDate'];
+    
     String displayExpiry = 'N/A';
-    if (rawExpiry is Timestamp) {
-      displayExpiry = DateFormat('dd/MM/yyyy').format(rawExpiry.toDate());
-    } else if (rawExpiry is String) {
-      displayExpiry = rawExpiry;
-    }
+    if (rawExpiry is Timestamp) displayExpiry = DateFormat('dd MMM yyyy').format(rawExpiry.toDate());
+    else if (rawExpiry is String) displayExpiry = rawExpiry;
+
+    String? displaySold;
+    if (rawSold is Timestamp) displaySold = DateFormat('dd MMM yyyy').format(rawSold.toDate());
+
+    String displayPurchased = 'N/A';
+    if (rawPurchased is Timestamp) displayPurchased = DateFormat('dd MMM yyyy').format(rawPurchased.toDate());
 
     final name = widget.data['name'] ?? 'Unknown Item';
-    final category = widget.data['category'] ?? "General";
+    final store = widget.data['store'] ?? 'Supermarket';
+    final status = widget.data['status'] ?? 'active';
+    final listingPrice = widget.data['listingPrice'] != null ? "₹${widget.data['listingPrice']}" : null;
+
+    final isSold = status == 'sold';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: const Text("Item Details", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF2D3436))),
+        title: const Text("Product Details", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
+        centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const SizedBox(height: 24),
+            // 🏷️ STATUS BADGE
+            if (status != 'active')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(color: isSold ? Colors.green : Colors.orange, borderRadius: BorderRadius.circular(30)),
+                  child: Text(
+                    status.toUpperCase(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1),
+                  ),
+                ),
+              ),
+
             Container(
-              width: 140, height: 140,
-              decoration: BoxDecoration(color: const Color(0xFF5D8064).withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.inventory_2_rounded, size: 60, color: Color(0xFF5D8064)),
-            ),
-            const SizedBox(height: 32),
-            Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
-            const SizedBox(height: 8),
-            Text(category.toString().toUpperCase(), style: const TextStyle(color: Color(0xFF5D8064), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
-            const SizedBox(height: 40),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 1.4,
-                children: [
-                  _detailTile("EXPIRY DATE", displayExpiry, Icons.calendar_today_rounded),
-                  _detailTile("PRICE", "₹${widget.data['price'] ?? '0'}", Icons.currency_rupee_rounded),
-                  _detailTile("STATUS", "Locked", Icons.lock_outline_rounded),
-                  _detailTile("ID", widget.docId.substring(0, 5), Icons.tag_rounded),
-                ],
+              padding: const EdgeInsets.all(32),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 10))],
               ),
-            ),
-            const SizedBox(height: 60),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black12)),
-                      ),
-                      onPressed: () {
-                        dev.log("Opening editor for: ${widget.docId}");
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => EditProductScreen(initialData: widget.data, docId: widget.docId)));
-                      },
-                      icon: const Icon(Icons.edit_rounded, size: 20),
-                      label: const Text("Edit", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(child: Text(name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1F2937)))),
+                      Icon(isSold ? Icons.check_circle_rounded : Icons.inventory_2_outlined, color: isSold ? Colors.green : const Color(0xFF10B981), size: 30),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.withOpacity(0.1),
-                        foregroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        elevation: 0,
+                  const SizedBox(height: 8),
+                  Text("Source: $store", style: const TextStyle(fontSize: 15, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 32),
+                  
+                  if (displaySold != null) ...[
+                    _detailRow(Icons.verified_outlined, "Sold Date", displaySold, Colors.green),
+                    const Divider(height: 32, thickness: 0.5),
+                  ],
+                  
+                  if (listingPrice != null && status == 'selling') ...[
+                    _detailRow(Icons.sell_outlined, "Listing Price", listingPrice, Colors.green),
+                    const Divider(height: 32, thickness: 0.5),
+                  ],
+
+                  _detailRow(Icons.calendar_month_rounded, "Expiry Date", displayExpiry, Colors.orange),
+                  const Divider(height: 32, thickness: 0.5),
+                  _detailRow(Icons.shopping_basket_outlined, "Purchased On", displayPurchased, Colors.blueGrey),
+                  const Divider(height: 32, thickness: 0.5),
+                  _detailRow(Icons.currency_rupee_rounded, "Original Price", "₹${widget.data['price']}", Colors.blue),
+                  const Divider(height: 32, thickness: 0.5),
+                  _detailRow(Icons.qr_code_scanner_rounded, "Barcode", widget.data['barcode'] ?? "None", Colors.purple),
+                  
+                  const SizedBox(height: 40),
+                  
+                  if (!isSold)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EditProductScreen(initialData: widget.data, docId: widget.docId))),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1F2937),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: const Text("Edit Item", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
                       ),
+                      const SizedBox(width: 12),
+                      IconButton.filledTonal(
+                        onPressed: _deleteProduct, 
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                        style: IconButton.styleFrom(backgroundColor: Colors.redAccent.withOpacity(0.1), padding: const EdgeInsets.all(16)),
+                      ),
+                    ],
+                  )
+                  else
+                  Center(
+                    child: OutlinedButton.icon(
                       onPressed: _deleteProduct,
-                      icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                      label: const Text("Delete", style: TextStyle(fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                      label: const Text("Delete Record", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 32), side: BorderSide(color: Colors.redAccent.withOpacity(0.2)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 48),
           ],
         ),
       ),
     );
   }
 
-  Widget _detailTile(String lbl, String val, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.black.withOpacity(0.04))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(children: [Icon(icon, size: 12, color: Colors.grey), const SizedBox(width: 4), Text(lbl, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))]),
-          const SizedBox(height: 6),
-          Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, overflow: TextOverflow.ellipsis)),
-        ],
-      ),
+  Widget _detailRow(IconData icon, String label, String value, Color color) {
+    return Row(
+      children: [
+        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 20)),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF), fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+            const SizedBox(height: 2),
+            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF374151))),
+          ],
+        ),
+      ],
     );
   }
 }

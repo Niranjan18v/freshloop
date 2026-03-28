@@ -1,36 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../models/notification_model.dart';
 import '../../core/app_colors.dart';
 
-/// Updated Notification Center screen showing only 'expiry' related notifications.
-/// Features Firestore filtering, timestamp sorting, and intelligent icon selection based on content.
+/// Private Multi-User Notification Center.
+/// Strictly isolated to the current user's history under 'users/{uid}/notifications'.
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final db = FirebaseFirestore.instance;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const Center(child: Text("Please log in to see notifications."));
+    
+    final notificationRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('notifications');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: const Text("Notification Center", style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text("Notification Center", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1F2937))),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // ── 🛡️ FILTERED FIRESTORE QUERY ──────────────────────────────────────
-        // Only fetches 'expiry' notifications, sorted by latest first using timestamp.
-        stream: db.collection('notifications')
+        // ── 🛡️ PRIVATE ISOLATED QUERY ──────────────────────────────────────
+        stream: notificationRef
             .where('type', isEqualTo: 'expiry')
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) return _buildErrorState(snapshot.error.toString());
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF5D8064)));
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
 
           final notifications = snapshot.data!.docs
               .map((doc) => AppNotification.fromSnapshot(doc))
@@ -43,7 +49,7 @@ class NotificationsScreen extends StatelessWidget {
             itemCount: notifications.length,
             itemBuilder: (context, i) {
               final note = notifications[i];
-              return _notificationCard(context, note);
+              return _notificationCard(context, note, notificationRef);
             },
           );
         },
@@ -51,9 +57,7 @@ class NotificationsScreen extends StatelessWidget {
     );
   }
 
-  Widget _notificationCard(BuildContext context, AppNotification note) {
-    // ── 🧬 DYNAMIC UI LOGIC ──────────────────────────────────────
-    // Since 'type' is now filtered as 'expiry', we use the title to pick icons.
+  Widget _notificationCard(BuildContext context, AppNotification note, CollectionReference ref) {
     final themeColor = note.title.contains('❌') ? Colors.redAccent : Colors.orangeAccent;
     final icon = note.title.contains('❌') ? Icons.error_outline_rounded : Icons.hourglass_top_rounded;
 
@@ -67,9 +71,9 @@ class NotificationsScreen extends StatelessWidget {
         decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(20)),
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
-      onDismissed: (_) => FirebaseFirestore.instance.collection('notifications').doc(note.id).delete(),
+      onDismissed: (_) => ref.doc(note.id).delete(),
       child: GestureDetector(
-        onTap: () => FirebaseFirestore.instance.collection('notifications').doc(note.id).update({'isRead': true}),
+        onTap: () => ref.doc(note.id).update({'isRead': true}),
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
@@ -85,7 +89,7 @@ class NotificationsScreen extends StatelessWidget {
               decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle),
               child: Icon(icon, color: themeColor, size: 24),
             ),
-            title: Text(note.title, style: TextStyle(fontWeight: note.isRead ? FontWeight.normal : FontWeight.w900, fontSize: 16)),
+            title: Text(note.title, style: TextStyle(fontWeight: note.isRead ? FontWeight.normal : FontWeight.w900, fontSize: 16, color: const Color(0xFF1F2937))),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -111,13 +115,13 @@ class NotificationsScreen extends StatelessWidget {
           const SizedBox(height: 20),
           const Text("No Alerts Found", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 8),
-          const Text("You'll see only expiry alerts here.", style: TextStyle(color: Colors.grey, fontSize: 14)),
+          const Text("You'll see only your private alerts here.", style: TextStyle(color: Colors.grey, fontSize: 14)),
         ],
       ),
     );
   }
 
   Widget _buildErrorState(String error) {
-    return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Query Error: $error\nEnsure index for 'type' and 'timestamp' is ready.", textAlign: TextAlign.center, style: const TextStyle(color: Colors.red))));
+    return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Query Error: $error", textAlign: TextAlign.center, style: const TextStyle(color: Colors.red))));
   }
 }
