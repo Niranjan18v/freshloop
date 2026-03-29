@@ -35,11 +35,28 @@ class _ShopScreenState extends State<ShopScreen> {
               SliverAppBar(
                 pinned: true,
                 expandedHeight: 120,
-                backgroundColor: Colors.white.withOpacity(0.9),
+                backgroundColor: Colors.white.withOpacity(0.95),
                 elevation: 0,
-                flexibleSpace: const FlexibleSpaceBar(
-                  titlePadding: EdgeInsets.only(left: 20, bottom: 20),
-                  title: Text("Shop Marketplace", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827), fontSize: 22)),
+                surfaceTintColor: Colors.transparent,
+                flexibleSpace: FlexibleSpaceBar(
+                  centerTitle: false,
+                  titlePadding: const EdgeInsets.only(left: 20, bottom: 20),
+                  title: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        "Shop Marketplace",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900, 
+                          color: Color(0xFF111827), 
+                          fontSize: 22,
+                          letterSpacing: -0.5,
+                        )
+                      ),
+                      Text("Community Pantry Hub", style: TextStyle(fontSize: 10, color: Color(0xFF6B7280), letterSpacing: 1.2, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
                 ),
               ),
 
@@ -48,10 +65,14 @@ class _ShopScreenState extends State<ShopScreen> {
                   height: 60,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     children: [
                       _buildFilterChip("ALL", !_isFilterActive, () => setState(() => _isFilterActive = false)),
-                      ...ProductCategory.values.map((cat) => _buildFilterChip(cat.name.toUpperCase(), _isFilterActive && _selectedCategory == cat, () => setState(() { _isFilterActive = true; _selectedCategory = cat; }))),
+                      ...ProductCategory.values.map((cat) => Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: _buildFilterChip(cat.name.toUpperCase(), _isFilterActive && _selectedCategory == cat, () => setState(() { _isFilterActive = true; _selectedCategory = cat; })),
+                      )),
                     ],
                   ),
                 ),
@@ -60,7 +81,7 @@ class _ShopScreenState extends State<ShopScreen> {
               StreamBuilder<List<Product>>(
                 stream: _db.streamPublicMarketplace(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) return const SliverFillRemaining(child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+                  if (snapshot.connectionState == ConnectionState.waiting) return const SliverFillRemaining(child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981))));
                   if (snapshot.hasError) return SliverFillRemaining(child: _errorArea(snapshot.error.toString()));
                   final products = snapshot.data ?? [];
                   final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -71,9 +92,14 @@ class _ShopScreenState extends State<ShopScreen> {
                   if (filtered.isEmpty) return SliverFillRemaining(child: _emptyArea());
 
                   return SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 14, mainAxisSpacing: 14, childAspectRatio: 0.62),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2, 
+                        crossAxisSpacing: 12, 
+                        mainAxisSpacing: 12, 
+                        childAspectRatio: 0.65
+                      ),
                       delegate: SliverChildBuilderDelegate((_, i) => _shopItemCard(filtered[i]), childCount: filtered.length),
                     ),
                   );
@@ -89,18 +115,26 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label, style: TextStyle(color: isSelected ? Colors.white : const Color(0xFF111827), fontWeight: FontWeight.bold, fontSize: 10)),
-        selected: isSelected,
-        onSelected: (_) => onTap(),
-        selectedColor: const Color(0xFF111827),
-        backgroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isSelected ? Colors.transparent : Colors.black12)),
-        showCheckmark: false,
+    return ChoiceChip(
+      label: Text(
+        label, 
+        style: TextStyle(
+          color: isSelected ? Colors.white : const Color(0xFF6B7280), 
+          fontWeight: FontWeight.w800, 
+          fontSize: 10,
+          letterSpacing: 0.5,
+        )
       ),
+      selected: isSelected,
+      onSelected: (_) => onTap(),
+      selectedColor: const Color(0xFF10B981),
+      backgroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16), 
+        side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFFE5E7EB)),
+      ),
+      showCheckmark: false,
     );
   }
 
@@ -110,22 +144,82 @@ class _ShopScreenState extends State<ShopScreen> {
     return GestureDetector(
       onTap: () => _showPublicDetails(p),
       child: Container(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: Colors.black.withOpacity(0.04)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 8))]),
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(28), 
+          boxShadow: [
+            BoxShadow(color: const Color(0xFF111827).withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))
+          ],
+          border: Border.all(color: const Color(0xFFF3F4F6), width: 1.5),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(height: 120, width: double.infinity, decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: const BorderRadius.vertical(top: Radius.circular(28)), gradient: LinearGradient(colors: [urgencyColor.withOpacity(0.1), Colors.grey.shade100], begin: Alignment.topLeft, end: Alignment.bottomRight)), child: Center(child: Icon(Icons.shopping_basket_outlined, size: 40, color: urgencyColor.withOpacity(0.4)))),
+            Expanded(
+              child: Container(
+                width: double.infinity, 
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB), 
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)), 
+                  gradient: LinearGradient(
+                    colors: [urgencyColor.withOpacity(0.1), Colors.white], 
+                    begin: Alignment.topLeft, 
+                    end: Alignment.bottomRight
+                  ),
+                ), 
+                child: Center(
+                  child: Hero(
+                    tag: 'shop_icon_${p.id}',
+                    child: Icon(Icons.shopping_basket_rounded, size: 48, color: urgencyColor.withOpacity(0.3))
+                  )
+                )
+              ),
+            ),
             Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                 Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF111827))),
-                 const SizedBox(height: 4),
-                 Row(children: [Text("₹${p.listingPrice}", style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 18)), const SizedBox(width: 6), Text("₹${p.price}", style: const TextStyle(color: Colors.grey, fontSize: 11, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.bold))]),
-                 const SizedBox(height: 10),
-                 Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: urgencyColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(daysLeft <= 0 ? "EXPIRED" : "$daysLeft DAYS LEFT", style: TextStyle(color: urgencyColor, fontWeight: FontWeight.w900, fontSize: 8))),
-                 const SizedBox(height: 10),
-                 Row(children: [const Icon(Icons.person_outline, size: 12, color: Colors.grey), const SizedBox(width: 4), Expanded(child: Text(p.sellerName ?? 'Seller', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)))])
-              ]),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, 
+                children: [
+                   Text(
+                     p.name, 
+                     maxLines: 1, 
+                     overflow: TextOverflow.ellipsis, 
+                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF111827), letterSpacing: -0.5)
+                   ),
+                   const SizedBox(height: 6),
+                   Row(
+                     children: [
+                       Text("₹${p.listingPrice}", style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 18)), 
+                       const SizedBox(width: 8), 
+                       Text("₹${p.price}", style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w800))
+                     ]
+                   ),
+                   const SizedBox(height: 12),
+                   Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), 
+                     decoration: BoxDecoration(color: urgencyColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), 
+                     child: Text(
+                       daysLeft <= 0 ? "EXPIRED" : "$daysLeft DAYS LEFT", 
+                       style: TextStyle(color: urgencyColor, fontWeight: FontWeight.w900, fontSize: 9, letterSpacing: 0.5)
+                     )
+                   ),
+                   const SizedBox(height: 12),
+                   Row(
+                     children: [
+                       const Icon(Icons.person_rounded, size: 12, color: Color(0xFF9CA3AF)), 
+                       const SizedBox(width: 6), 
+                       Expanded(
+                         child: Text(
+                           p.sellerName ?? 'Seller', 
+                           maxLines: 1, 
+                           overflow: TextOverflow.ellipsis, 
+                           style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10, fontWeight: FontWeight.w800)
+                         )
+                       )
+                     ]
+                   )
+                ]
+              ),
             ),
           ],
         ),
@@ -140,41 +234,87 @@ class _ShopScreenState extends State<ShopScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+        decoration: const BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32))
+        ),
         padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+            Center(
+              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2)))
+            ),
             const SizedBox(height: 24),
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.black.withOpacity(0.05))),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB), 
+                borderRadius: BorderRadius.circular(24), 
+                border: Border.all(color: const Color(0xFFE5E7EB))
+              ),
               child: Row(
                 children: [
-                  const CircleAvatar(radius: 22, backgroundColor: Color(0xFF111827), child: Icon(Icons.person_rounded, color: Colors.white, size: 24)),
-                  const SizedBox(width: 14),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(p.sellerName ?? 'Anonymous Seller', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)), const Text("Verified FreshLoop Member", style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10))])),
-                  GestureDetector(onTap: () => _showSellerDetails(p), child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF111827), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 16))),
+                  const CircleAvatar(
+                    radius: 24, 
+                    backgroundColor: Color(0xFF111827), 
+                    child: Icon(Icons.person_rounded, color: Colors.white, size: 28)
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start, 
+                      children: [
+                        Text(p.sellerName ?? 'Anonymous Seller', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF111827))), 
+                        const Text("Verified FreshLoop Member", style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5))
+                      ]
+                    )
+                  ),
+                  GestureDetector(
+                    onTap: () => _showSellerDetails(p), 
+                    child: Container(
+                      padding: const EdgeInsets.all(14), 
+                      decoration: BoxDecoration(color: const Color(0xFF111827), borderRadius: BorderRadius.circular(18)), 
+                      child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 18)
+                    )
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            Text(p.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 26, color: Color(0xFF111827))),
-            const SizedBox(height: 4),
-            Row(children: [Text("₹${p.listingPrice}", style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 24)), const SizedBox(width: 10), Text("Original: ₹${p.price}", style: const TextStyle(color: Colors.grey, fontSize: 13, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.bold))]),
-            const Divider(height: 40, thickness: 1),
-            _detailRow(Icons.timer_outlined, "Shelf Life Guarantee", "${p.expiryDateString} (${p.expiryDate.difference(DateTime.now()).inDays} Days Left)", Colors.redAccent),
-            _detailRow(Icons.storefront_outlined, "Original Sourced From", p.store, Colors.purple),
-            _detailRow(Icons.category_outlined, "Food Classification", p.category.name.toUpperCase(), Colors.blue),
-            _detailRow(Icons.verified_user_outlined, "Health Sync Status", "Active Tracking Enabled", Colors.green),
+            Text(p.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 28, color: Color(0xFF111827), letterSpacing: -0.5)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text("₹${p.listingPrice}", style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 28)), 
+                const SizedBox(width: 14), 
+                Text("Original: ₹${p.price}", style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w800))
+              ]
+            ),
+            const Divider(height: 48, thickness: 1.5, color: Color(0xFFF3F4F6)),
+            _detailRow(Icons.timer_rounded, "Shelf Life Guarantee", "${p.expiryDateString} (${p.expiryDate.difference(DateTime.now()).inDays} Days Left)", Colors.redAccent),
+            _detailRow(Icons.storefront_rounded, "Original Sourced From", p.store, Colors.purpleAccent),
+            _detailRow(Icons.category_rounded, "Food Classification", p.category.name.toUpperCase(), Colors.blueAccent),
+            _detailRow(Icons.verified_user_rounded, "Health Sync Status", "Active Tracking Enabled", const Color(0xFF10B981)),
             const Spacer(),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () => _showSellerDetails(p),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF111827), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.person_pin_rounded, size: 18), SizedBox(width: 8), Text("SHOW SELLER DETAILS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1))]),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF111827), 
+                  foregroundColor: Colors.white, 
+                  padding: const EdgeInsets.symmetric(vertical: 22), 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center, 
+                  children: const [
+                    Icon(Icons.person_pin_rounded, size: 20), 
+                    SizedBox(width: 10), 
+                    Text("SHOW SELLER DETAILS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.2))
+                  ]
+                ),
               ),
             ),
           ],

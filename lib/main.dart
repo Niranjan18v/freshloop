@@ -15,6 +15,7 @@ import 'screens/add/add_product_screen.dart';
 import 'screens/products/products_screen.dart';
 import 'screens/sales/sell_screen.dart';
 import 'screens/login_screen.dart';
+import 'chat_screen.dart';
 
 import 'package:flutter/foundation.dart'; // ✅ ADDED
 
@@ -61,13 +62,17 @@ return MaterialApp(
 debugShowCheckedModeBanner: false,
 title: 'FreshLoop',
 theme: ThemeData(
-useMaterial3: true,
-primaryColor: const Color(0xFF5D8064),
-scaffoldBackgroundColor: const Color(0xFFF5F7FA),
-appBarTheme: const AppBarTheme(
-elevation: 0,
-backgroundColor: Colors.transparent,
-),
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color(0xFF10B981),
+    primary: const Color(0xFF10B981),
+    surface: Colors.white,
+  ),
+  scaffoldBackgroundColor: const Color(0xFFF9FAFB),
+  appBarTheme: const AppBarTheme(
+    elevation: 0,
+    backgroundColor: Colors.transparent,
+  ),
 ),
 home: StreamBuilder<User?>(
 stream: FirebaseAuth.instance.authStateChanges(),
@@ -80,7 +85,7 @@ Widget activeScreen;
           key: ValueKey('loading'),
           body: Center(
             child: CircularProgressIndicator(
-              color: Color(0xFF5D8064),
+              color: Color(0xFF10B981),
             ),
           ),
         );
@@ -132,8 +137,20 @@ class MainNavigation extends StatefulWidget {
 
 class MainNavigationState extends State<MainNavigation> {
 int index = 0;
+final PageController _pageController = PageController();
 
 void setTabIndex(int i) {
+  if (mounted) {
+    setState(() => index = i);
+    _pageController.animateToPage(
+      i,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+}
+
+void onPageChanged(int i) {
   if (mounted) setState(() => index = i);
 }
 
@@ -182,23 +199,85 @@ void initState() {
 
 @override
 Widget build(BuildContext context) {
-return Scaffold(
-extendBody: true,
-body: IndexedStack(
-index: index,
-children: screens,
-),
+    return Scaffold(
+      extendBody: true,
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: onPageChanged,
+        children: screens,
+      ),
+      floatingActionButton: (index == 0 || index == 3) // Only Home and Products
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 85),
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.heavyImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => FreshLoopChat()),
+                  );
+                },
+                child: Hero(
+                  tag: 'chef_ai_sparkle_hero',
+                  child: Container(
+                    width: 65,
+                    height: 65,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: const Color(0xFF10B981), width: 2),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(30),
+                          child: Image.asset(
+                            'assets/chef_avatar.png',
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          right: 2,
+                          bottom: 2,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 bottomNavigationBar: ClipRRect(
 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
 child: BackdropFilter(
 filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
 child: Container(
 decoration: BoxDecoration(
-color: Colors.white.withOpacity(0.75),
-border: Border(top: BorderSide(color: Colors.white.withOpacity(0.2), width: 1)),
+color: Colors.white.withValues(alpha: 0.75),
+border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.2), width: 1)),
 boxShadow: [
 BoxShadow(
-color: Colors.black.withOpacity(0.05),
+color: Colors.black.withValues(alpha: 0.05),
 blurRadius: 20,
 offset: const Offset(0, -5),
 )
@@ -207,16 +286,17 @@ offset: const Offset(0, -5),
 child: BottomNavigationBar(
 currentIndex: index,
 onTap: (i) {
-HapticFeedback.lightImpact();
-setState(() => index = i);
+  HapticFeedback.lightImpact();
+  setTabIndex(i);
 },
 backgroundColor: Colors.transparent,
 elevation: 0,
-selectedItemColor: const Color(0xFF5D8064),
-unselectedItemColor: Colors.black38,
+selectedItemColor: const Color(0xFF10B981),
+unselectedItemColor: const Color(0xFF94A3B8),
 selectedLabelStyle: const TextStyle(
-fontWeight: FontWeight.bold,
-fontSize: 13,
+  fontWeight: FontWeight.w800,
+  fontSize: 12,
+  letterSpacing: 0.5,
 ),
 unselectedLabelStyle: const TextStyle(fontSize: 12),
 type: BottomNavigationBarType.fixed,

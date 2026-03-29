@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/product_model.dart';
 import '../../services/firestore_service.dart';
@@ -104,17 +105,44 @@ class _SellScreenState extends State<SellScreen> {
             expandedHeight: 120,
             backgroundColor: Colors.white,
             elevation: 0,
+            surfaceTintColor: Colors.transparent,
             flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-              title: const Text("Marketplace", style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827), fontSize: 20)),
-              background: Container(color: Colors.white),
+              centerTitle: false,
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 20),
+              title: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Marketplace Info",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900, 
+                      color: Color(0xFF111827), 
+                      fontSize: 22,
+                      letterSpacing: -0.5,
+                    )
+                  ),
+                  Text("Manage Listings & Sales", style: TextStyle(fontSize: 10, color: Color(0xFF6B7280), letterSpacing: 1.2, fontWeight: FontWeight.w800)),
+                ],
+              ),
             ),
           ),
 
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [_compactTab("Available", 0), _compactTab("Active", 1), _compactTab("Sold Page", 2)]),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  _compactTab("AVAILABLE", 0),
+                  _compactTab("LISTED", 1),
+                  _compactTab("HISTORY", 2),
+                ],
+              ),
             ),
           ),
 
@@ -211,15 +239,33 @@ class _SellScreenState extends State<SellScreen> {
   }
 
   Widget _compactLifecycleCard(Product p) {
-    final isSold = p.status == ProductStatus.sold || selectedTab == 2;
+    final isHistory = selectedTab == 2;
+    final isDonated = p.status == ProductStatus.donated;
+    final isSold = p.status == ProductStatus.sold;
     final isListedForSale = p.status == ProductStatus.selling;
+    
     final days = _getDaysLeft(p.expiryDate);
     final urgencyColor = _getUrgencyColor(days);
-    final cardBg = isSold ? Colors.white : urgencyColor.withOpacity(0.05);
+    
+    // 🎨 RESPECTFUL COLORS FOR DONATION
+    final cardBg = isDonated 
+        ? const Color(0xFFEFF6FF) 
+        : (isSold ? Colors.white : urgencyColor.withOpacity(0.05));
+    
+    final accentColor = isDonated ? const Color(0xFF3B82F6) : urgencyColor;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(24), border: Border.all(color: urgencyColor.withOpacity(isSold ? 0.0 : 0.2))),
+      decoration: BoxDecoration(
+        color: cardBg, 
+        borderRadius: BorderRadius.circular(24), 
+        border: Border.all(
+          color: isDonated 
+              ? const Color(0xFFBFDBFE) 
+              : accentColor.withOpacity(isHistory ? 0.0 : 0.2),
+          width: isDonated ? 1.5 : 1.0,
+        )
+      ),
       child: Column(
         children: [
           Padding(
@@ -230,8 +276,16 @@ class _SellScreenState extends State<SellScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(child: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF111827)))),
-                    if (!isSold) Text("$days days left", style: TextStyle(color: urgencyColor, fontWeight: FontWeight.bold, fontSize: 9)),
+                    Expanded(
+                      child: Text(
+                        p.name, 
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF111827))
+                      )
+                    ),
+                    if (!isHistory) 
+                       Text("$days days left", style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 9)),
+                    if (isDonated)
+                       const Icon(Icons.handshake_rounded, color: Color(0xFF3B82F6), size: 16),
                   ],
                 ),
                 Text(p.store, style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11, fontWeight: FontWeight.w700)),
@@ -239,23 +293,43 @@ class _SellScreenState extends State<SellScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      // 💰 DYNAMIC PRICE LABEL BASED ON STATE
-                      Text(isSold ? "SALE PRICE" : (isListedForSale ? "LISTED PRICE" : "ORIGINAL VALUE"), style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900)),
-                      Text("₹${(isSold || isListedForSale) ? p.listingPrice : p.price}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF111827))),
-                    ]),
-                    if (isSold && p.soldDate != null)
-                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        const Text("SELL DATE", style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900)),
-                        Text(DateFormat('dd MMM').format(p.soldDate!), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF111827))),
-                      ]),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start, 
+                      children: [
+                        Text(
+                          isDonated ? "GIFTED & DONATED" : (isSold ? "SALE PRICE" : (isListedForSale ? "LISTED PRICE" : "ORIGINAL VALUE")), 
+                          style: TextStyle(
+                            color: isDonated ? const Color(0xFF3B82F6) : Colors.grey, 
+                            fontSize: 8, 
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          )
+                        ),
+                        Text(
+                          isDonated ? "Impact Item" : "₹${(isSold || isListedForSale) ? p.listingPrice : p.price}", 
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900, 
+                            fontSize: 15, 
+                            color: isDonated ? const Color(0xFF1D4ED8) : const Color(0xFF111827)
+                          )
+                        ),
+                      ]
+                    ),
+                    if (isHistory && p.soldDate != null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end, 
+                        children: [
+                          Text(isDonated ? "DONATED ON" : "SELL DATE", style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900)),
+                          Text(DateFormat('dd MMM').format(p.soldDate!), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF111827))),
+                        ]
+                      ),
                   ],
                 ),
               ],
             ),
           ),
           
-          if (!isSold)
+          if (!isHistory)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(color: urgencyColor.withOpacity(0.1), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))),
@@ -279,8 +353,34 @@ class _SellScreenState extends State<SellScreen> {
   }
 
   Widget _compactTab(String label, int index) {
-    final s = selectedTab == index;
-    return GestureDetector(onTap: () => setState(() => selectedTab = index), child: Container(margin: const EdgeInsets.symmetric(horizontal: 4), padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), decoration: BoxDecoration(color: s ? const Color(0xFF111827) : Colors.white, borderRadius: BorderRadius.circular(16)), child: Text(label, style: TextStyle(color: s ? Colors.white : Colors.black87, fontWeight: FontWeight.w900, fontSize: 12))));
+    final isSelected = selectedTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          setState(() => selectedTab = index);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))] : [],
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                fontSize: 10,
+                letterSpacing: 0.8,
+                color: isSelected ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _blankState() {

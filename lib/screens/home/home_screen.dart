@@ -73,23 +73,73 @@ class _HomeScreenState extends State<HomeScreen> {
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                padding: const EdgeInsets.only(top: 40, left: 20, right: 20, bottom: 20),
                 sliver: SliverToBoxAdapter(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 30, offset: const Offset(0, 10))]),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF111827).withOpacity(0.06),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
                     child: Row(
                       children: [
-                        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF047857)]), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.eco_rounded, color: Colors.white, size: 24)),
-                        const SizedBox(width: 14),
-                        const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("FreshLoop", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF111827))), Text("Pantry Intelligence", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold))]),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF10B981), Color(0xFF047857)],
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF10B981).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.eco_rounded, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "FreshLoop",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 20,
+                                letterSpacing: -0.5,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            Text(
+                              "Pantry Intelligence",
+                              style: TextStyle(
+                                color: Color(0xFF6B7280),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
                         const Spacer(),
                         const NotificationIcon(),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 14),
                         GestureDetector(
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())), 
                           child: Hero(
-                            tag: 'profile', 
+                            tag: 'profile_avatar_main', 
                             child: StreamBuilder<DocumentSnapshot>(
                               stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
                               builder: (context, snapshot) {
@@ -98,11 +148,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                   final data = snapshot.data!.data() as Map<String, dynamic>;
                                   b64Image = data['profileImage'];
                                 }
-                                return CircleAvatar(
-                                  radius: 20, 
-                                  backgroundColor: const Color(0xFFE5E7EB),
-                                  backgroundImage: b64Image != null ? MemoryImage(base64Decode(b64Image)) : null,
-                                  child: b64Image == null ? ClipRRect(borderRadius: BorderRadius.circular(30), child: const Icon(Icons.person_rounded, color: Colors.grey)) : null,
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: const Color(0xFFF3F4F6), width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 22, 
+                                    backgroundColor: const Color(0xFFF3F4F6),
+                                    backgroundImage: b64Image != null ? MemoryImage(base64Decode(b64Image)) : null,
+                                    child: b64Image == null ? const Icon(Icons.person_rounded, color: Color(0xFF9CA3AF)) : null,
+                                  ),
                                 );
                               }
                             )

@@ -15,7 +15,7 @@ dependencies:
   firebase_core: ^4.6.0
   cloud_firestore: ^6.2.0
   firebase_auth: ^6.3.0
-  mobile_scanner: ^6.0.0
+  mobile_scanner: ^5.2.3
   http: ^1.2.0
   intl: ^0.18.1
   provider: ^6.1.1
@@ -45,3 +45,6 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/chef_avatar.png
+    - assets/user_avatar.png
+

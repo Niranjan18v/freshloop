@@ -47,7 +47,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: Color(0xFF5D8064)),
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF10B981),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF111827),
+            ),
           ),
           child: child!,
         );
